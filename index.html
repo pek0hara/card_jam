@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>カードゲーム</title>
+    <link rel="stylesheet" href="style.css?v=19">
+</head>
+<body>
+    <div id="game-container">
+        <div id="game-board">
+            <!-- プレイヤー2エリア（上側） -->
+            <div class="player-area" id="player2-area">
+                <div class="player-info">
+                    <span class="player-name">プレイヤー2</span>
+                    <div class="player-stats">
+                        <span class="life">ライフ: <span id="player2-life">20</span></span>
+                        <span class="mana">マナ: <span id="player2-mana">0</span></span>
+                        <span class="action">行動力: <span id="player2-action">0</span></span>
+                    </div>
+                </div>
+                <div class="hand" id="player2-hand">
+                    <!-- プレイヤー2の手札 -->
+                </div>
+                <div class="battlefield" id="player2-battlefield">
+                    <div class="field-slot" data-position="0"></div>
+                    <div class="field-slot" data-position="1"></div>
+                    <div class="field-slot" data-position="2"></div>
+                    <div class="field-slot" data-position="3"></div>
+                </div>
+            </div>
+
+            <!-- ターンコントロール（中央） -->
+            <div id="turn-controls">
+                <button id="end-turn-btn">ターン終了</button>
+            </div>
+
+            <!-- プレイヤー1エリア（下側） -->
+            <div class="player-area" id="player1-area">
+                <div class="battlefield" id="player1-battlefield">
+                    <div class="field-slot" data-position="0"></div>
+                    <div class="field-slot" data-position="1"></div>
+                    <div class="field-slot" data-position="2"></div>
+                    <div class="field-slot" data-position="3"></div>
+                </div>
+                <div class="hand" id="player1-hand">
+                    <!-- プレイヤー1の手札 -->
+                </div>
+                <div class="player-info">
+                    <span class="player-name">プレイヤー1</span>
+                    <div class="player-stats">
+                        <span class="life">ライフ: <span id="player1-life">20</span></span>
+                        <span class="mana">マナ: <span id="player1-mana">3</span></span>
+                        <span class="action">行動力: <span id="player1-action">1</span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="game-log">
+            <div id="log-content"></div>
+        </div>
+    </div>
+
+    <script src="game.js?v=3"></script>
+</body>
+</html>
