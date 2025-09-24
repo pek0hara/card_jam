@@ -11,11 +11,13 @@ class CardGame {
         this.players = {
             1: {
                 life: 20,
-                mana: 3,
-                actionPoints: 1,
+                mana: 0,
+                actionPoints: 0,
                 hand: [],
                 deck: [],
-                battlefield: [null, null, null, null]
+                battlefield: [null, null, null, null],
+                firstTurnCompleted: false,
+                canAttackThisTurn: false
             },
             2: {
                 life: 20,
@@ -23,7 +25,9 @@ class CardGame {
                 actionPoints: 0,
                 hand: [],
                 deck: [],
-                battlefield: [null, null, null, null]
+                battlefield: [null, null, null, null],
+                firstTurnCompleted: false,
+                canAttackThisTurn: false
             }
         };
         
@@ -42,14 +46,8 @@ class CardGame {
     initializeGame() {
         this.createDecks();
         this.drawInitialHands();
-        this.drawCard(this.gameState.currentPlayer);
-        this.updateUI();
         this.log("カードジャム v1.2 - ゲーム開始！");
-        this.log("プレイヤー1のターンです。");
-
-        if (this.isComputerTurn()) {
-            this.scheduleComputerTurn();
-        }
+        this.startTurn(this.gameState.currentPlayer, { skipDraw: true });
     }
 
     createDecks() {
@@ -146,12 +144,17 @@ class CardGame {
 
     attackWithMonster(attackerPlayer, attackerPosition, targetPlayer, targetPosition = null) {
         const attacker = this.players[attackerPlayer].battlefield[attackerPosition];
-        
+
         if (!attacker) {
             this.log("攻撃するモンスターがいません！");
             return false;
         }
-        
+
+        if (!this.players[attackerPlayer].canAttackThisTurn) {
+            this.log("このターンは攻撃できません！");
+            return false;
+        }
+
         if (this.players[attackerPlayer].actionPoints < 1) {
             this.log("行動力が不足しています！");
             return false;
@@ -182,33 +185,55 @@ class CardGame {
         return true;
     }
 
-    endTurn() {
+    startTurn(player, { skipDraw = false } = {}) {
         if (this.gameState.gameOver) return;
 
-        const nextPlayer = this.gameState.currentPlayer === 1 ? 2 : 1;
-        this.gameState.currentPlayer = nextPlayer;
-        this.gameState.turnNumber++;
+        const playerData = this.players[player];
+        const isFirstTurnForPlayer = !playerData.firstTurnCompleted;
 
-        const currentPlayerData = this.players[nextPlayer];
-        
-        this.drawCard(nextPlayer);
+        if (!skipDraw) {
+            this.drawCard(player);
+            if (this.gameState.gameOver) {
+                this.updateUI();
+                return;
+            }
+        }
 
-        const turnMana = Math.min(10, Math.floor((this.gameState.turnNumber + 1) / 2) + 2);
-        currentPlayerData.mana = turnMana;
-        
-        const isFirstTurnOfGame = this.gameState.turnNumber === 1;
-        currentPlayerData.actionPoints = isFirstTurnOfGame ? 1 : 2;
+        playerData.mana = this.calculateTurnMana();
+        playerData.actionPoints = 2;
+        playerData.canAttackThisTurn = !isFirstTurnForPlayer;
 
         this.selectedCard = null;
         this.selectedMonster = null;
         this.attackMode = false;
 
-        this.log(`プレイヤー${nextPlayer}のターンです。`);
+        this.log(`プレイヤー${player}のターンです。`);
+        if (skipDraw) {
+            this.log("先攻プレイヤーの最初のターンはドローを行いません。");
+        }
+        if (!playerData.canAttackThisTurn) {
+            this.log("このターンは攻撃できません。");
+        }
+
         this.updateUI();
 
-        if (this.isComputerPlayer(nextPlayer) && !this.gameState.gameOver) {
+        if (this.isComputerTurn()) {
             this.scheduleComputerTurn();
         }
+    }
+
+    endTurn() {
+        if (this.gameState.gameOver) return;
+
+        const currentPlayer = this.gameState.currentPlayer;
+        this.players[currentPlayer].firstTurnCompleted = true;
+        this.players[currentPlayer].canAttackThisTurn = true;
+
+        const nextPlayer = currentPlayer === 1 ? 2 : 1;
+        this.gameState.currentPlayer = nextPlayer;
+        this.gameState.turnNumber++;
+
+        this.startTurn(nextPlayer);
     }
 
     checkWinCondition() {
@@ -464,6 +489,8 @@ class CardGame {
     computerAttack(player, opponent, prioritizeLethal = false) {
         const playerData = this.players[player];
 
+        if (!playerData.canAttackThisTurn) return false;
+
         if (playerData.actionPoints < 1) return false;
 
         const attackers = playerData.battlefield
@@ -534,6 +561,10 @@ class CardGame {
             this.updateUI();
         }
         return success;
+    }
+
+    calculateTurnMana() {
+        return Math.min(10, Math.floor((this.gameState.turnNumber + 1) / 2) + 2);
     }
 
     delay(ms) {
