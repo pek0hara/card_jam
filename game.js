@@ -15,8 +15,7 @@ class CardGame {
                 actionPoints: 1,
                 hand: [],
                 deck: [],
-                battlefield: [null, null, null, null],
-                isFirstTurn: true
+                battlefield: [null, null, null, null]
             },
             2: {
                 life: 20,
@@ -24,8 +23,7 @@ class CardGame {
                 actionPoints: 0,
                 hand: [],
                 deck: [],
-                battlefield: [null, null, null, null],
-                isFirstTurn: true
+                battlefield: [null, null, null, null]
             }
         };
         
@@ -44,6 +42,7 @@ class CardGame {
     initializeGame() {
         this.createDecks();
         this.drawInitialHands();
+        this.drawCard(this.gameState.currentPlayer);
         this.updateUI();
         this.log("カードジャム v1.2 - ゲーム開始！");
         this.log("プレイヤー1のターンです。");
@@ -192,11 +191,7 @@ class CardGame {
 
         const currentPlayerData = this.players[nextPlayer];
         
-        if (!currentPlayerData.isFirstTurn) {
-            this.drawCard(nextPlayer);
-        } else {
-            currentPlayerData.isFirstTurn = false;
-        }
+        this.drawCard(nextPlayer);
 
         const turnMana = Math.min(10, Math.floor((this.gameState.turnNumber + 1) / 2) + 2);
         currentPlayerData.mana = turnMana;
