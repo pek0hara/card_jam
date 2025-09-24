@@ -11,7 +11,7 @@ class CardGame {
         this.players = {
             1: {
                 life: 20,
-                mana: 0,
+                gems: 0,
                 actionPoints: 0,
                 hand: [],
                 deck: [],
@@ -21,7 +21,7 @@ class CardGame {
             },
             2: {
                 life: 20,
-                mana: 0,
+                gems: 0,
                 actionPoints: 0,
                 hand: [],
                 deck: [],
@@ -120,8 +120,8 @@ class CardGame {
         const card = this.players[player].hand[cardIndex];
         
         if (!card) return false;
-        if (this.players[player].mana < card.cost) {
-            this.log("マナが不足しています！");
+        if (this.players[player].gems < card.cost) {
+            this.log("ジェムが不足しています！");
             return false;
         }
         if (this.players[player].actionPoints < 1) {
@@ -133,7 +133,7 @@ class CardGame {
             return false;
         }
 
-        this.players[player].mana -= card.cost;
+        this.players[player].gems -= card.cost;
         this.players[player].actionPoints -= 1;
         this.players[player].battlefield[position] = card;
         this.players[player].hand.splice(cardIndex, 1);
@@ -175,6 +175,8 @@ class CardGame {
             if (target.hp <= 0) {
                 this.players[targetPlayer].battlefield[targetPosition] = null;
                 this.log(`${target.name}は破壊されました！`);
+                this.players[targetPlayer].gems += 1;
+                this.log(`プレイヤー${targetPlayer}はジェムを1獲得しました。`);
             }
         } else {
             this.players[targetPlayer].life -= attacker.attack;
@@ -199,7 +201,7 @@ class CardGame {
             }
         }
 
-        playerData.mana = this.calculateTurnMana();
+        playerData.gems += 2;
         playerData.actionPoints = 2;
         playerData.canAttackThisTurn = !isFirstTurnForPlayer;
 
@@ -256,7 +258,7 @@ class CardGame {
     updateUI() {
         for (let player = 1; player <= 2; player++) {
             document.getElementById(`player${player}-life`).textContent = this.players[player].life;
-            document.getElementById(`player${player}-mana`).textContent = this.players[player].mana;
+            document.getElementById(`player${player}-gems`).textContent = this.players[player].gems;
             document.getElementById(`player${player}-action`).textContent = this.players[player].actionPoints;
             
             this.renderHand(player);
@@ -463,7 +465,7 @@ class CardGame {
 
         const selectableCards = playerData.hand
             .map((card, index) => ({ card, index }))
-            .filter(item => item.card.cost <= playerData.mana);
+            .filter(item => item.card.cost <= playerData.gems);
 
         if (selectableCards.length === 0) return false;
 
@@ -561,10 +563,6 @@ class CardGame {
             this.updateUI();
         }
         return success;
-    }
-
-    calculateTurnMana() {
-        return Math.min(10, Math.floor((this.gameState.turnNumber + 1) / 2) + 2);
     }
 
     delay(ms) {
