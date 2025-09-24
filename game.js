@@ -11,21 +11,23 @@ class CardGame {
         this.players = {
             1: {
                 life: 20,
-                mana: 3,
-                actionPoints: 1,
-                hand: [],
-                deck: [],
-                battlefield: [null, null, null, null],
-                isFirstTurn: true
-            },
-            2: {
-                life: 20,
-                mana: 0,
+                gems: 0,
                 actionPoints: 0,
                 hand: [],
                 deck: [],
                 battlefield: [null, null, null, null],
-                isFirstTurn: true
+                firstTurnCompleted: false,
+                canAttackThisTurn: false
+            },
+            2: {
+                life: 20,
+                gems: 0,
+                actionPoints: 0,
+                hand: [],
+                deck: [],
+                battlefield: [null, null, null, null],
+                firstTurnCompleted: false,
+                canAttackThisTurn: false
             }
         };
         
@@ -44,13 +46,8 @@ class CardGame {
     initializeGame() {
         this.createDecks();
         this.drawInitialHands();
-        this.updateUI();
         this.log("カードジャム v1.2 - ゲーム開始！");
-        this.log("プレイヤー1のターンです。");
-
-        if (this.isComputerTurn()) {
-            this.scheduleComputerTurn();
-        }
+        this.startTurn(this.gameState.currentPlayer, { skipDraw: true });
     }
 
     createDecks() {
@@ -123,8 +120,8 @@ class CardGame {
         const card = this.players[player].hand[cardIndex];
         
         if (!card) return false;
-        if (this.players[player].mana < card.cost) {
-            this.log("マナが不足しています！");
+        if (this.players[player].gems < card.cost) {
+            this.log("ジェムが不足しています！");
             return false;
         }
         if (this.players[player].actionPoints < 1) {
@@ -136,7 +133,7 @@ class CardGame {
             return false;
         }
 
-        this.players[player].mana -= card.cost;
+        this.players[player].gems -= card.cost;
         this.players[player].actionPoints -= 1;
         this.players[player].battlefield[position] = card;
         this.players[player].hand.splice(cardIndex, 1);
@@ -150,6 +147,11 @@ class CardGame {
 
         if (!attacker) {
             this.log("攻撃するモンスターがいません！");
+            return false;
+        }
+
+        if (!this.players[attackerPlayer].canAttackThisTurn) {
+            this.log("このターンは攻撃できません！");
             return false;
         }
 
@@ -189,6 +191,8 @@ class CardGame {
             if (target.hp <= 0) {
                 this.players[targetPlayer].battlefield[targetPosition] = null;
                 this.log(`${target.name}は破壊されました！`);
+                this.players[targetPlayer].gems += 1;
+                this.log(`プレイヤー${targetPlayer}はジェムを1獲得しました。`);
             }
         } else {
             this.players[targetPlayer].life -= damage;
@@ -230,37 +234,55 @@ class CardGame {
         return Math.max(1, damage); // Minimum 1 damage
     }
 
-    endTurn() {
+    startTurn(player, { skipDraw = false } = {}) {
         if (this.gameState.gameOver) return;
 
-        const nextPlayer = this.gameState.currentPlayer === 1 ? 2 : 1;
-        this.gameState.currentPlayer = nextPlayer;
-        this.gameState.turnNumber++;
+        const playerData = this.players[player];
+        const isFirstTurnForPlayer = !playerData.firstTurnCompleted;
 
-        const currentPlayerData = this.players[nextPlayer];
-        
-        if (!currentPlayerData.isFirstTurn) {
-            this.drawCard(nextPlayer);
-        } else {
-            currentPlayerData.isFirstTurn = false;
+        if (!skipDraw) {
+            this.drawCard(player);
+            if (this.gameState.gameOver) {
+                this.updateUI();
+                return;
+            }
         }
 
-        const turnMana = Math.min(10, Math.floor((this.gameState.turnNumber + 1) / 2) + 2);
-        currentPlayerData.mana = turnMana;
-        
-        const isFirstTurnOfGame = this.gameState.turnNumber === 1;
-        currentPlayerData.actionPoints = isFirstTurnOfGame ? 1 : 2;
+        playerData.gems += 2;
+        playerData.actionPoints = 2;
+        playerData.canAttackThisTurn = !isFirstTurnForPlayer;
 
         this.selectedCard = null;
         this.selectedMonster = null;
         this.attackMode = false;
 
-        this.log(`プレイヤー${nextPlayer}のターンです。`);
+        this.log(`プレイヤー${player}のターンです。`);
+        if (skipDraw) {
+            this.log("先攻プレイヤーの最初のターンはドローを行いません。");
+        }
+        if (!playerData.canAttackThisTurn) {
+            this.log("このターンは攻撃できません。");
+        }
+
         this.updateUI();
 
-        if (this.isComputerPlayer(nextPlayer) && !this.gameState.gameOver) {
+        if (this.isComputerTurn()) {
             this.scheduleComputerTurn();
         }
+    }
+
+    endTurn() {
+        if (this.gameState.gameOver) return;
+
+        const currentPlayer = this.gameState.currentPlayer;
+        this.players[currentPlayer].firstTurnCompleted = true;
+        this.players[currentPlayer].canAttackThisTurn = true;
+
+        const nextPlayer = currentPlayer === 1 ? 2 : 1;
+        this.gameState.currentPlayer = nextPlayer;
+        this.gameState.turnNumber++;
+
+        this.startTurn(nextPlayer);
     }
 
     checkWinCondition() {
@@ -283,7 +305,7 @@ class CardGame {
     updateUI() {
         for (let player = 1; player <= 2; player++) {
             document.getElementById(`player${player}-life`).textContent = this.players[player].life;
-            document.getElementById(`player${player}-mana`).textContent = this.players[player].mana;
+            document.getElementById(`player${player}-gems`).textContent = this.players[player].gems;
             document.getElementById(`player${player}-action`).textContent = this.players[player].actionPoints;
             
             this.renderHand(player);
@@ -496,7 +518,7 @@ class CardGame {
 
         const selectableCards = playerData.hand
             .map((card, index) => ({ card, index }))
-            .filter(item => item.card.cost <= playerData.mana);
+            .filter(item => item.card.cost <= playerData.gems);
 
         if (selectableCards.length === 0) return false;
 
@@ -521,6 +543,8 @@ class CardGame {
 
     computerAttack(player, opponent, prioritizeLethal = false) {
         const playerData = this.players[player];
+
+        if (!playerData.canAttackThisTurn) return false;
 
         if (playerData.actionPoints < 1) return false;
 
