@@ -147,18 +147,30 @@ class CardGame {
 
     attackWithMonster(attackerPlayer, attackerPosition, targetPlayer, targetPosition = null) {
         const attacker = this.players[attackerPlayer].battlefield[attackerPosition];
-        
+
         if (!attacker) {
             this.log("攻撃するモンスターがいません！");
             return false;
         }
-        
+
         if (this.players[attackerPlayer].actionPoints < 1) {
             this.log("行動力が不足しています！");
             return false;
         }
 
+        // Check if the attack is valid (front-facing only)
+        if (targetPosition !== null && !this.isValidAttackTarget(attackerPosition, targetPosition)) {
+            this.log("その位置には攻撃できません！正面のモンスターのみ攻撃可能です。");
+            return false;
+        }
+
         this.players[attackerPlayer].actionPoints -= 1;
+
+        // Calculate damage with position-based reduction
+        let damage = attacker.attack;
+        if (targetPosition !== null) {
+            damage = this.calculateDamageWithPositionModifier(attackerPosition, targetPosition, damage);
+        }
 
         if (targetPosition !== null) {
             const target = this.players[targetPlayer].battlefield[targetPosition];
@@ -166,21 +178,56 @@ class CardGame {
                 this.log("攻撃対象のモンスターがいません！");
                 return false;
             }
-            
-            target.hp -= attacker.attack;
-            this.log(`${attacker.name}が${target.name}に${attacker.attack}ダメージ！`);
-            
+
+            target.hp -= damage;
+            if (damage !== attacker.attack) {
+                this.log(`${attacker.name}が${target.name}に${damage}ダメージ！（位置補正: ${attacker.attack} → ${damage}）`);
+            } else {
+                this.log(`${attacker.name}が${target.name}に${damage}ダメージ！`);
+            }
+
             if (target.hp <= 0) {
                 this.players[targetPlayer].battlefield[targetPosition] = null;
                 this.log(`${target.name}は破壊されました！`);
             }
         } else {
-            this.players[targetPlayer].life -= attacker.attack;
-            this.log(`${attacker.name}がプレイヤー${targetPlayer}に${attacker.attack}ダメージ！`);
+            this.players[targetPlayer].life -= damage;
+            this.log(`${attacker.name}がプレイヤー${targetPlayer}に${damage}ダメージ！`);
         }
-        
+
         this.checkWinCondition();
         return true;
+    }
+
+    // Check if attack target is valid (front-facing only)
+    isValidAttackTarget(attackerPosition, targetPosition) {
+        // Position mapping: 0=front-left, 1=front-right, 2=back-left, 3=back-right
+        // Attackers can only target the same column (left attacks left, right attacks right)
+        const attackerColumn = attackerPosition % 2; // 0 for left, 1 for right
+        const targetColumn = targetPosition % 2;
+
+        return attackerColumn === targetColumn;
+    }
+
+    // Calculate damage with position-based modifiers
+    calculateDamageWithPositionModifier(attackerPosition, targetPosition, baseDamage) {
+        const attackerRow = Math.floor(attackerPosition / 2); // 0=front, 1=back
+        const targetRow = Math.floor(targetPosition / 2); // 0=front, 1=back
+
+        let damage = baseDamage;
+
+        if (attackerRow === 0 && targetRow === 1) {
+            // Front row attacking back row: -1 damage
+            damage -= 1;
+        } else if (attackerRow === 1 && targetRow === 0) {
+            // Back row attacking front row: -1 damage
+            damage -= 1;
+        } else if (attackerRow === 1 && targetRow === 1) {
+            // Back row attacking back row: -2 damage
+            damage -= 2;
+        }
+
+        return Math.max(1, damage); // Minimum 1 damage
     }
 
     endTurn() {
@@ -310,9 +357,15 @@ class CardGame {
                 if (player === this.gameState.currentPlayer && !this.isComputerPlayer(player)) {
                     monsterElement.addEventListener('click', () => this.selectMonster(player, position));
                     monsterElement.style.cursor = 'pointer';
-                } else if (this.attackMode) {
-                    monsterElement.addEventListener('click', () => this.executeAttack(this.gameState.currentPlayer, player, position));
-                    monsterElement.style.cursor = 'crosshair';
+                } else if (this.attackMode && this.selectedMonster !== null) {
+                    // Only allow attacking valid targets (front-facing only)
+                    if (this.isValidAttackTarget(this.selectedMonster, position)) {
+                        monsterElement.addEventListener('click', () => this.executeAttack(this.gameState.currentPlayer, player, position));
+                        monsterElement.style.cursor = 'crosshair';
+                    } else {
+                        monsterElement.style.cursor = 'not-allowed';
+                        monsterElement.style.opacity = '0.5';
+                    }
                 }
 
                 slot.appendChild(monsterElement);
@@ -487,16 +540,20 @@ class CardGame {
         attackers.forEach(attacker => {
             if (opponentMonsters.length > 0) {
                 opponentMonsters.forEach(target => {
-                    choices.push({
-                        attackerIndex: attacker.index,
-                        attackerAttack: attacker.monster.attack,
-                        targetPosition: target.index,
-                        damage: attacker.monster.attack,
-                        lethal: false,
-                        willKill: attacker.monster.attack >= target.monster.hp,
-                        targetHp: target.monster.hp,
-                        targetAttack: target.monster.attack
-                    });
+                    // Only consider valid attack targets (front-facing only)
+                    if (this.isValidAttackTarget(attacker.index, target.index)) {
+                        const damage = this.calculateDamageWithPositionModifier(attacker.index, target.index, attacker.monster.attack);
+                        choices.push({
+                            attackerIndex: attacker.index,
+                            attackerAttack: attacker.monster.attack,
+                            targetPosition: target.index,
+                            damage: damage,
+                            lethal: false,
+                            willKill: damage >= target.monster.hp,
+                            targetHp: target.monster.hp,
+                            targetAttack: target.monster.attack
+                        });
+                    }
                 });
             } else {
                 const damage = attacker.monster.attack;
