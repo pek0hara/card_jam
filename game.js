@@ -68,8 +68,8 @@ class CardGame {
             { name: "ゴブリン", hp: 1, attack: 2, cost: 1 },
             { name: "オーク", hp: 3, attack: 2, cost: 2 },
             { name: "トロール", hp: 5, attack: 3, cost: 4 },
-            { name: "ドラゴン", hp: 8, attack: 6, cost: 7 },
-            { name: "スライム", hp: 3, attack: 1, cost: 1 },
+            { name: "ドラゴン", hp: 6, attack: 5, cost: 7 },
+            { name: "スライム", hp: 4, attack: 1, cost: 1 },
             { name: "スケルトン", hp: 1, attack: 3, cost: 2 },
             { name: "ナイト", hp: 4, attack: 3, cost: 3 },
             { name: "ウィザード", hp: 2, attack: 4, cost: 3 }
