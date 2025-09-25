@@ -230,6 +230,18 @@ body {
     justify-content: center;
 }
 
+/* プレイヤー2（相手）の盤面は前列と後列を入れ替え */
+#player2-battlefield {
+    grid-template-areas:
+        "back-left back-right"
+        "front-left front-right";
+}
+
+#player2-battlefield .field-slot[data-position="0"] { grid-area: front-left; }
+#player2-battlefield .field-slot[data-position="1"] { grid-area: front-right; }
+#player2-battlefield .field-slot[data-position="2"] { grid-area: back-left; }
+#player2-battlefield .field-slot[data-position="3"] { grid-area: back-right; }
+
 .field-slot {
     width: 90px;
     height: 60px;
@@ -289,8 +301,8 @@ body {
     background: rgba(255, 255, 255, 0.9);
     border-radius: 10px;
     padding: 5px;
-    flex: 0 0 64px;
-    height: auto;
+    flex: 0 0 160px;
+    height: 160px;
     overflow-y: auto;
 }
 
