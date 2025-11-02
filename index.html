@@ -7,66 +7,87 @@
     <link rel="stylesheet" href="style.css?v=19">
 </head>
 <body>
-    <div id="game-container">
-        <!-- 難易度選択パネル -->
-        <div id="difficulty-panel">
-            <span class="difficulty-label">AI難易度:</span>
-            <button class="difficulty-btn" data-difficulty="easy">簡単</button>
-            <button class="difficulty-btn active" data-difficulty="normal">普通</button>
-            <button class="difficulty-btn" data-difficulty="hard">難しい</button>
-        </div>
+    <div id="game-wrapper">
+        <div id="game-container">
+            <div id="control-panels">
+                <!-- 難易度選択パネル -->
+                <div id="difficulty-panel">
+                    <span class="difficulty-label">AI難易度:</span>
+                    <button class="difficulty-btn" data-difficulty="easy">簡単</button>
+                    <button class="difficulty-btn active" data-difficulty="normal">普通</button>
+                    <button class="difficulty-btn" data-difficulty="hard">難しい</button>
+                </div>
 
-        <div id="game-board">
-            <!-- プレイヤー2エリア（上側） -->
-            <div class="player-area" id="player2-area">
-                <div class="player-info">
-                    <span class="player-name">プレイヤー2</span>
-                    <div class="player-stats">
-                        <span class="life">ライフ: <span id="player2-life">20</span></span>
-                        <span class="gems">ジェム: <span id="player2-gems">0</span></span>
-                        <span class="action">行動力: <span id="player2-action">0</span></span>
+                <div id="display-panel" role="group" aria-label="画面サイズ設定">
+                    <span class="display-label">画面サイズ:</span>
+                    <button type="button" class="display-btn" data-scale="small" aria-pressed="false">小</button>
+                    <button type="button" class="display-btn active" data-scale="medium" aria-pressed="true">標準</button>
+                    <button type="button" class="display-btn" data-scale="large" aria-pressed="false">大</button>
+                </div>
+            </div>
+
+            <div id="game-board">
+                <!-- プレイヤー2エリア（上側） -->
+                <div class="player-area" id="player2-area">
+                    <div class="player-info">
+                        <span class="player-name">プレイヤー2</span>
+                        <div class="player-stats">
+                            <span class="life">ライフ: <span id="player2-life">20</span></span>
+                            <span class="gems">ジェム: <span id="player2-gems">0</span></span>
+                            <span class="action">行動力: <span id="player2-action">0</span></span>
+                        </div>
+                    </div>
+                    <div class="hand" id="player2-hand">
+                        <!-- プレイヤー2の手札 -->
+                    </div>
+                    <div class="battlefield" id="player2-battlefield">
+                        <div class="field-slot" data-position="0"></div>
+                        <div class="field-slot" data-position="1"></div>
+                        <div class="field-slot" data-position="2"></div>
+                        <div class="field-slot" data-position="3"></div>
                     </div>
                 </div>
-                <div class="hand" id="player2-hand">
-                    <!-- プレイヤー2の手札 -->
-                </div>
-                <div class="battlefield" id="player2-battlefield">
-                    <div class="field-slot" data-position="0"></div>
-                    <div class="field-slot" data-position="1"></div>
-                    <div class="field-slot" data-position="2"></div>
-                    <div class="field-slot" data-position="3"></div>
-                </div>
-            </div>
 
-            <!-- ターンコントロール（中央） -->
-            <div id="turn-controls">
-                <button id="end-turn-btn">ターン終了</button>
-            </div>
+                <!-- ターンコントロール（中央） -->
+                <div id="turn-controls">
+                    <button id="end-turn-btn">ターン終了</button>
+                </div>
 
-            <!-- プレイヤー1エリア（下側） -->
-            <div class="player-area" id="player1-area">
-                <div class="battlefield" id="player1-battlefield">
-                    <div class="field-slot" data-position="0"></div>
-                    <div class="field-slot" data-position="1"></div>
-                    <div class="field-slot" data-position="2"></div>
-                    <div class="field-slot" data-position="3"></div>
-                </div>
-                <div class="hand" id="player1-hand">
-                    <!-- プレイヤー1の手札 -->
-                </div>
-                <div class="player-info">
-                    <span class="player-name">プレイヤー1</span>
-                    <div class="player-stats">
-                        <span class="life">ライフ: <span id="player1-life">20</span></span>
-                        <span class="gems">ジェム: <span id="player1-gems">0</span></span>
-                        <span class="action">行動力: <span id="player1-action">1</span></span>
+                <!-- プレイヤー1エリア（下側） -->
+                <div class="player-area" id="player1-area">
+                    <div class="battlefield" id="player1-battlefield">
+                        <div class="field-slot" data-position="0"></div>
+                        <div class="field-slot" data-position="1"></div>
+                        <div class="field-slot" data-position="2"></div>
+                        <div class="field-slot" data-position="3"></div>
+                    </div>
+                    <div class="hand" id="player1-hand">
+                        <!-- プレイヤー1の手札 -->
+                    </div>
+                    <div class="player-info">
+                        <span class="player-name">プレイヤー1</span>
+                        <div class="player-stats">
+                            <span class="life">ライフ: <span id="player1-life">20</span></span>
+                            <span class="gems">ジェム: <span id="player1-gems">0</span></span>
+                            <span class="action">行動力: <span id="player1-action">1</span></span>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div id="game-log">
-            <div id="log-content"></div>
+            <div id="game-log">
+                <div id="log-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="ability-popup" aria-hidden="true">
+        <div class="ability-popup-content" role="dialog" aria-modal="true" aria-labelledby="ability-popup-title">
+            <div class="ability-popup-header">
+                <h2 id="ability-popup-title">特殊能力</h2>
+                <button type="button" id="ability-popup-close" aria-label="閉じる">×</button>
+            </div>
+            <p id="ability-popup-text"></p>
         </div>
     </div>
 
