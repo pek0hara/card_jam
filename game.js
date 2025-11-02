@@ -76,8 +76,15 @@ class CardGame {
         this.computerTurnTimeout = null;
         this.autoEndTurnTimeout = null;
 
+        this.abilityPopup = null;
+        this.abilityPopupText = null;
+        this.abilityPopupClose = null;
+        this.lastAbilityTrigger = null;
+        this.handleAbilityKeydown = this.handleAbilityKeydown.bind(this);
+
         this.initializeGame();
         this.setupEventListeners();
+        this.setupAbilityPopup();
     }
 
     initializeGame() {
@@ -500,6 +507,8 @@ class CardGame {
             this.renderBattlefield(player);
         }
 
+        this.registerAbilityTriggers();
+
         const endTurnBtn = document.getElementById('end-turn-btn');
         if (this.isComputerTurn()) {
             endTurnBtn.disabled = true;
@@ -532,8 +541,18 @@ class CardGame {
                     <span>HP:${card.hp}</span>
                     <span>ATK:${card.attack}</span>
                 </div>
-                ${card.abilityText ? `<div class="card-ability" title="${card.abilityText}"">⭐</div>` : ''}
             `;
+
+            if (card.abilityText) {
+                const abilityButton = document.createElement('button');
+                abilityButton.type = 'button';
+                abilityButton.className = 'card-ability ability-trigger';
+                abilityButton.textContent = '⭐';
+                abilityButton.title = card.abilityText;
+                abilityButton.dataset.abilityText = card.abilityText;
+                abilityButton.setAttribute('aria-label', `${card.name}の特殊能力を表示`);
+                cardElement.appendChild(abilityButton);
+            }
 
             if (player === this.gameState.currentPlayer && !this.isComputerPlayer(player)) {
                 cardElement.addEventListener('click', () => this.selectCard(index));
@@ -561,9 +580,19 @@ class CardGame {
                         <span>HP: ${monster.hp}/${monster.maxHp}</span>
                         <span>ATK: ${monster.attack}</span>
                     </div>
-                    ${monster.abilityText ? `<div class="monster-ability" title="${monster.abilityText}">${monster.abilityText.split(':')[0]}</div>` : ''}
                 `;
-                
+
+                if (monster.abilityText) {
+                    const abilityButton = document.createElement('button');
+                    abilityButton.type = 'button';
+                    abilityButton.className = 'monster-ability ability-trigger';
+                    abilityButton.textContent = monster.abilityText.split(':')[0];
+                    abilityButton.title = monster.abilityText;
+                    abilityButton.dataset.abilityText = monster.abilityText;
+                    abilityButton.setAttribute('aria-label', `${monster.name}の特殊能力を表示`);
+                    monsterElement.appendChild(abilityButton);
+                }
+
                 if (player === this.gameState.currentPlayer && !this.isComputerPlayer(player)) {
                     monsterElement.addEventListener('click', () => this.selectMonster(player, position));
                     monsterElement.style.cursor = 'pointer';
@@ -972,6 +1001,85 @@ class CardGame {
                 this.log(`AI難易度を「${e.target.textContent}」に変更しました。`);
             });
         });
+    }
+
+    setupAbilityPopup() {
+        this.abilityPopup = document.getElementById('ability-popup');
+        this.abilityPopupText = document.getElementById('ability-popup-text');
+        this.abilityPopupClose = document.getElementById('ability-popup-close');
+
+        if (!this.abilityPopup || !this.abilityPopupText) {
+            return;
+        }
+
+        if (this.abilityPopupClose) {
+            this.abilityPopupClose.addEventListener('click', () => this.hideAbilityPopup());
+        }
+
+        this.abilityPopup.addEventListener('click', (event) => {
+            if (event.target === this.abilityPopup) {
+                this.hideAbilityPopup();
+            }
+        });
+
+        document.addEventListener('keydown', this.handleAbilityKeydown);
+    }
+
+    registerAbilityTriggers() {
+        const triggers = document.querySelectorAll('.ability-trigger');
+        triggers.forEach(trigger => {
+            if (trigger.dataset.abilityListenerAttached === 'true') {
+                return;
+            }
+
+            trigger.dataset.abilityListenerAttached = 'true';
+
+            trigger.addEventListener('click', (event) => {
+                event.stopPropagation();
+                event.preventDefault();
+                const abilityText = trigger.dataset.abilityText || trigger.title;
+                if (abilityText) {
+                    this.showAbilityPopup(abilityText, trigger);
+                }
+            });
+        });
+    }
+
+    showAbilityPopup(text, trigger = null) {
+        if (!this.abilityPopup || !this.abilityPopupText) {
+            return;
+        }
+
+        this.lastAbilityTrigger = trigger;
+        this.abilityPopupText.textContent = text;
+        this.abilityPopup.classList.add('active');
+        this.abilityPopup.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('ability-popup-open');
+
+        if (this.abilityPopupClose) {
+            this.abilityPopupClose.focus();
+        }
+    }
+
+    hideAbilityPopup() {
+        if (!this.abilityPopup) {
+            return;
+        }
+
+        this.abilityPopup.classList.remove('active');
+        this.abilityPopup.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('ability-popup-open');
+
+        if (this.lastAbilityTrigger && typeof this.lastAbilityTrigger.focus === 'function') {
+            this.lastAbilityTrigger.focus();
+        }
+        this.lastAbilityTrigger = null;
+    }
+
+    handleAbilityKeydown(event) {
+        if (event.key === 'Escape' && this.abilityPopup && this.abilityPopup.classList.contains('active')) {
+            this.hideAbilityPopup();
+        }
     }
 
     log(message) {
