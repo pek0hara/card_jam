@@ -14,7 +14,14 @@ const ROW = {
 class CardGame {
     constructor() {
         const firstPlayer = Math.random() < 0.5 ? 1 : 2;
-        console.log(`先攻プレイヤーを決定: プレイヤー${firstPlayer}`);
+
+        // Initialize audio context
+        this.audioContext = null;
+        try {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+            console.warn('Web Audio API not supported');
+        }
 
         this.gameState = {
             currentPlayer: firstPlayer,
@@ -33,7 +40,14 @@ class CardGame {
                 deck: [],
                 battlefield: [null, null, null, null],
                 firstTurnCompleted: false,
-                canAttackThisTurn: false
+                canAttackThisTurn: false,
+                stats: {
+                    damageDealt: 0,
+                    damageTaken: 0,
+                    monstersSummoned: 0,
+                    monstersDestroyed: 0,
+                    gemsSpent: 0
+                }
             },
             2: {
                 life: 20,
@@ -43,11 +57,19 @@ class CardGame {
                 deck: [],
                 battlefield: [null, null, null, null],
                 firstTurnCompleted: false,
-                canAttackThisTurn: false
+                canAttackThisTurn: false,
+                stats: {
+                    damageDealt: 0,
+                    damageTaken: 0,
+                    monstersSummoned: 0,
+                    monstersDestroyed: 0,
+                    gemsSpent: 0
+                }
             }
         };
         
         this.computerPlayers = new Set([2]);
+        this.aiDifficulty = 'normal'; // easy, normal, hard
 
         this.selectedCard = null;
 
@@ -73,14 +95,14 @@ class CardGame {
 
     createDecks() {
         const cardTemplates = [
-            { name: "ゴブリン", hp: 1, attack: 2, cost: 1 },
-            { name: "スライム", hp: 5, attack: 1, cost: 2 },
-            { name: "オーク", hp: 3, attack: 2, cost: 2 },
-            { name: "スケルトン", hp: 1, attack: 3, cost: 2 },
-            { name: "トロール", hp: 5, attack: 2, cost: 3 },
-            { name: "ナイト", hp: 3, attack: 3, cost: 3 },
-            { name: "ウィザード", hp: 2, attack: 4, cost: 3 },
-            { name: "ドラゴン", hp: 4, attack: 4, cost: 4 }
+            { name: "ゴブリン", hp: 1, attack: 2, cost: 1, ability: "greed", abilityText: "召喚時:ジェム+1" },
+            { name: "スライム", hp: 5, attack: 1, cost: 2, ability: "poison", abilityText: "破壊時:攻撃者に1ダメージ" },
+            { name: "オーク", hp: 3, attack: 2, cost: 2, ability: "berserk", abilityText: "攻撃時:+1ダメージ/自身に1ダメージ" },
+            { name: "スケルトン", hp: 1, attack: 3, cost: 2, ability: "curse", abilityText: "破壊時:相手に1ダメージ" },
+            { name: "トロール", hp: 5, attack: 2, cost: 3, ability: "regenerate", abilityText: "ターン開始時:HP+1回復" },
+            { name: "ナイト", hp: 3, attack: 3, cost: 3, ability: "guard", abilityText: "前列時:直接攻撃-1軽減" },
+            { name: "ウィザード", hp: 2, attack: 4, cost: 3, ability: "magic", abilityText: "召喚時:相手前列に1ダメージ" },
+            { name: "ドラゴン", hp: 4, attack: 4, cost: 4, ability: "mighty", abilityText: "直接攻撃時:+1ダメージ" }
         ];
 
         for (let player = 1; player <= 2; player++) {
@@ -155,20 +177,20 @@ class CardGame {
         }
 
         this.players[player].gems -= card.cost;
+        this.players[player].stats.gemsSpent += card.cost;
+        this.players[player].stats.monstersSummoned += 1;
         this.players[player].actionPoints -= 1;
         this.players[player].battlefield[position] = card;
         this.players[player].hand.splice(cardIndex, 1);
 
         this.log(`プレイヤー${player}が${card.name}を召喚しました！`);
+        this.playSound('summon');
+
+        // Trigger summon abilities
+        this.triggerAbility(card, 'summon', player);
 
         // Move back-row monsters to front if front positions are empty (no log)
         this.moveBackRowToFront(player, false);
-
-        // Debug: Show final position
-        console.log(`Summoned ${card.name} at position ${position} for player ${player}`);
-        const actualRow = this.getActualRow(position, player);
-        const rowLabel = actualRow === ROW.FRONT ? 'FRONT' : 'BACK';
-        console.log(`Position ${position} is ${rowLabel} row`);
 
         return true;
     }
@@ -202,6 +224,19 @@ class CardGame {
         // Calculate damage (no position modifiers)
         let damage = attacker.attack;
 
+        // Trigger attack abilities (like Berserk)
+        if (attacker.ability === 'berserk') {
+            damage += 1;
+            attacker.hp -= 1;
+            this.log(`${attacker.name}の狂戦士！攻撃力+1、自身に1ダメージ！`);
+            if (attacker.hp <= 0) {
+                this.players[attackerPlayer].battlefield[attackerPosition] = null;
+                this.log(`${attacker.name}は破壊されました！`);
+                this.players[attackerPlayer].gems += 1;
+                this.moveBackRowToFront(attackerPlayer);
+            }
+        }
+
         if (targetPosition !== null) {
             const target = this.players[targetPlayer].battlefield[targetPosition];
             if (!target) {
@@ -209,25 +244,28 @@ class CardGame {
                 return false;
             }
 
+            this.playSound('attack');
             target.hp -= damage;
+            this.players[attackerPlayer].stats.damageDealt += damage;
+            this.players[targetPlayer].stats.damageTaken += damage;
             this.log(`${attacker.name}が${target.name}に${damage}ダメージ！`);
+            this.playSound('damage');
 
             // Check for counter-attack: front row attacking front row
             const attackerRow = this.getActualRow(attackerPosition, attackerPlayer);
             const targetRow = this.getActualRow(targetPosition, targetPlayer);
 
-            // Debug info
-            console.log(`Attack: Player${attackerPlayer} pos ${attackerPosition} (actual row ${attackerRow}) -> Player${targetPlayer} pos ${targetPosition} (actual row ${targetRow}), target HP: ${target.hp}`);
-
             if (attackerRow === ROW.FRONT && targetRow === ROW.FRONT && target.hp > 0) {
                 // Front-to-front attack: target counter-attacks with its ATK
                 const counterDamage = target.attack;
                 attacker.hp -= counterDamage;
+                this.players[targetPlayer].stats.damageDealt += counterDamage;
+                this.players[attackerPlayer].stats.damageTaken += counterDamage;
                 this.log(`${target.name}が反撃！${attacker.name}に${counterDamage}ダメージ！`);
-                console.log(`Counter-attack: ${target.name} deals ${counterDamage} to ${attacker.name}`);
 
                 if (attacker.hp <= 0) {
                     this.players[attackerPlayer].battlefield[attackerPosition] = null;
+                    this.players[targetPlayer].stats.monstersDestroyed += 1;
                     this.log(`${attacker.name}は破壊されました！`);
                     this.players[attackerPlayer].gems += 1;
                     this.log(`プレイヤー${attackerPlayer}はジェムを1獲得しました。`);
@@ -238,7 +276,29 @@ class CardGame {
             }
 
             if (target.hp <= 0) {
+                // Trigger death abilities before removing
+                if (target.ability === 'poison' && attacker && attacker.hp > 0) {
+                    attacker.hp -= 1;
+                    this.players[targetPlayer].stats.damageDealt += 1;
+                    this.players[attackerPlayer].stats.damageTaken += 1;
+                    this.log(`${target.name}の毒！${attacker.name}に1ダメージ！`);
+                    if (attacker.hp <= 0) {
+                        this.players[attackerPlayer].battlefield[attackerPosition] = null;
+                        this.players[targetPlayer].stats.monstersDestroyed += 1;
+                        this.log(`${attacker.name}は破壊されました！`);
+                        this.players[attackerPlayer].gems += 1;
+                        this.moveBackRowToFront(attackerPlayer);
+                    }
+                }
+                if (target.ability === 'curse') {
+                    this.players[attackerPlayer].life -= 1;
+                    this.players[targetPlayer].stats.damageDealt += 1;
+                    this.players[attackerPlayer].stats.damageTaken += 1;
+                    this.log(`${target.name}の呪い！プレイヤー${attackerPlayer}に1ダメージ！`);
+                }
+
                 this.players[targetPlayer].battlefield[targetPosition] = null;
+                this.players[attackerPlayer].stats.monstersDestroyed += 1;
                 this.log(`${target.name}は破壊されました！`);
                 this.players[targetPlayer].gems += 1;
                 this.log(`プレイヤー${targetPlayer}はジェムを1獲得しました。`);
@@ -247,9 +307,27 @@ class CardGame {
                 this.moveBackRowToFront(targetPlayer);
             }
         } else {
+            // Direct attack to player
+            // Check for Dragon's mighty ability
+            if (attacker.ability === 'mighty') {
+                damage += 1;
+                this.log(`${attacker.name}の強力な一撃！ダメージ+1！`);
+            }
+
+            // Check for Knight's guard ability (reduce damage to player)
+            const guardReduction = this.calculateGuardReduction(targetPlayer);
+            if (guardReduction > 0) {
+                damage = Math.max(0, damage - guardReduction);
+                this.log(`ナイトの守護！ダメージを${guardReduction}軽減！`);
+            }
+
+            this.playSound('attack');
             this.players[targetPlayer].life -= damage;
+            this.players[attackerPlayer].stats.damageDealt += damage;
+            this.players[targetPlayer].stats.damageTaken += damage;
             this.players[targetPlayer].gems += 1;
             this.log(`${attacker.name}がプレイヤー${targetPlayer}に${damage}ダメージ！ジェムを1獲得。`);
+            this.playSound('damage');
         }
 
         this.checkWinCondition();
@@ -285,27 +363,6 @@ class CardGame {
         const targetRow = this.getActualRow(targetPosition, targetPlayer);
 
         return attackerColumn === targetColumn && targetRow === ROW.FRONT;
-    }
-
-    // Calculate damage with position-based modifiers
-    calculateDamageWithPositionModifier(attackerPosition, targetPosition, baseDamage, attackerPlayer, targetPlayer) {
-        const attackerRow = this.getActualRow(attackerPosition, attackerPlayer);
-        const targetRow = this.getActualRow(targetPosition, targetPlayer);
-
-        let damage = baseDamage;
-
-        if (attackerRow === ROW.FRONT && targetRow === ROW.BACK) {
-            // Front row attacking back row: -1 damage
-            damage -= 1;
-        } else if (attackerRow === ROW.BACK && targetRow === ROW.FRONT) {
-            // Back row attacking front row: -1 damage
-            damage -= 1;
-        } else if (attackerRow === ROW.BACK && targetRow === ROW.BACK) {
-            // Back row attacking back row: -2 damage
-            damage -= 2;
-        }
-
-        return Math.max(0, damage); // Minimum 0 damage
     }
 
     // Move back-row monsters to front-row if front positions are empty
@@ -359,6 +416,9 @@ class CardGame {
         playerData.actionPoints = 2;
         playerData.canAttackThisTurn = !isFirstTurnForPlayer;
 
+        // Trigger turn start abilities (like Troll's regenerate)
+        this.triggerTurnStartAbilities(player);
+
         this.selectedCard = null;
 
         this.log(`プレイヤー${player}のターンです。`);
@@ -393,6 +453,7 @@ class CardGame {
         this.gameState.currentPlayer = nextPlayer;
         this.gameState.turnNumber++;
 
+        this.playSound('turnEnd');
         this.startTurn(nextPlayer);
     }
 
@@ -411,7 +472,8 @@ class CardGame {
                     this.autoEndTurnTimeout = null;
                 }
                 this.log(`プレイヤー${winner}の勝利！`);
-                alert(`プレイヤー${winner}の勝利！`);
+                this.playSound('victory');
+                this.showGameStats(winner);
                 return;
             }
         }
@@ -452,8 +514,6 @@ class CardGame {
         const handElement = document.getElementById(`player${player}-hand`);
         handElement.innerHTML = '';
 
-        console.log(`renderHand for player ${player}, selectedCard: ${this.selectedCard}, currentPlayer: ${this.gameState.currentPlayer}`);
-
         this.players[player].hand.forEach((card, index) => {
             const cardElement = document.createElement('div');
             cardElement.className = 'card';
@@ -472,6 +532,7 @@ class CardGame {
                     <span>HP:${card.hp}</span>
                     <span>ATK:${card.attack}</span>
                 </div>
+                ${card.abilityText ? `<div class="card-ability" title="${card.abilityText}"">⭐</div>` : ''}
             `;
 
             if (player === this.gameState.currentPlayer && !this.isComputerPlayer(player)) {
@@ -495,11 +556,12 @@ class CardGame {
                 const monsterElement = document.createElement('div');
                 monsterElement.className = 'monster';
                 monsterElement.innerHTML = `
-                    <div class="monster-name">${monster.name}</div>
+                    <div class="monster-name">${monster.name}${monster.abilityText ? ' ⭐' : ''}</div>
                     <div class="monster-stats">
                         <span>HP: ${monster.hp}/${monster.maxHp}</span>
                         <span>ATK: ${monster.attack}</span>
                     </div>
+                    ${monster.abilityText ? `<div class="monster-ability" title="${monster.abilityText}">${monster.abilityText.split(':')[0]}</div>` : ''}
                 `;
                 
                 if (player === this.gameState.currentPlayer && !this.isComputerPlayer(player)) {
@@ -717,16 +779,42 @@ class CardGame {
 
         if (selectableCards.length === 0) return false;
 
-        selectableCards.sort((a, b) => {
-            const scoreDiff = this.evaluateCardScore(b.card) - this.evaluateCardScore(a.card);
-            if (scoreDiff !== 0) return scoreDiff;
-            if (b.card.attack !== a.card.attack) {
-                return b.card.attack - a.card.attack;
-            }
-            return b.card.hp - a.card.hp;
-        });
+        let targetCard;
 
-        const targetCard = selectableCards[0];
+        if (this.aiDifficulty === 'easy') {
+            // Easy: Random selection
+            targetCard = selectableCards[Math.floor(Math.random() * selectableCards.length)];
+        } else if (this.aiDifficulty === 'hard') {
+            // Hard: Advanced scoring with ability consideration
+            selectableCards.sort((a, b) => {
+                let scoreA = this.evaluateCardScore(a.card);
+                let scoreB = this.evaluateCardScore(b.card);
+
+                // Bonus for abilities
+                if (a.card.ability) scoreA += 2;
+                if (b.card.ability) scoreB += 2;
+
+                const scoreDiff = scoreB - scoreA;
+                if (scoreDiff !== 0) return scoreDiff;
+                if (b.card.attack !== a.card.attack) {
+                    return b.card.attack - a.card.attack;
+                }
+                return b.card.hp - a.card.hp;
+            });
+            targetCard = selectableCards[0];
+        } else {
+            // Normal: Standard scoring
+            selectableCards.sort((a, b) => {
+                const scoreDiff = this.evaluateCardScore(b.card) - this.evaluateCardScore(a.card);
+                if (scoreDiff !== 0) return scoreDiff;
+                if (b.card.attack !== a.card.attack) {
+                    return b.card.attack - a.card.attack;
+                }
+                return b.card.hp - a.card.hp;
+            });
+            targetCard = selectableCards[0];
+        }
+
         const position = openPositions[Math.floor(Math.random() * openPositions.length)];
 
         const success = this.summonMonster(player, targetCard.index, position);
@@ -753,6 +841,27 @@ class CardGame {
             });
 
         if (attackers.length === 0) return false;
+
+        // Easy difficulty: Random attack
+        if (this.aiDifficulty === 'easy' && !prioritizeLethal) {
+            const attacker = attackers[Math.floor(Math.random() * attackers.length)];
+            const opponentData = this.players[opponent];
+            const attackerColumn = attacker.index % 2;
+            const validTargets = opponentData.battlefield
+                .map((monster, index) => ({ monster, index }))
+                .filter(item => item.monster !== null && this.isValidAttackTarget(attacker.index, item.index, player, opponent));
+
+            if (validTargets.length > 0) {
+                const target = validTargets[Math.floor(Math.random() * validTargets.length)];
+                const success = this.attackWithMonster(player, attacker.index, opponent, target.index);
+                if (success) this.updateUI();
+                return success;
+            } else {
+                const success = this.attackWithMonster(player, attacker.index, opponent, null);
+                if (success) this.updateUI();
+                return success;
+            }
+        }
 
         const opponentData = this.players[opponent];
         const opponentMonsters = opponentData.battlefield
@@ -810,14 +919,27 @@ class CardGame {
             candidateChoices = lethalChoices;
         }
 
-        candidateChoices.sort((a, b) => {
-            if (a.lethal !== b.lethal) return b.lethal - a.lethal;
-            if (a.willKill !== b.willKill) return b.willKill - a.willKill;
-            if (a.targetAttack !== b.targetAttack) return b.targetAttack - a.targetAttack;
-            if (a.damage !== b.damage) return b.damage - a.damage;
-            if (a.targetHp !== b.targetHp) return a.targetHp - b.targetHp;
-            return b.attackerAttack - a.attackerAttack;
-        });
+        // Hard difficulty: More aggressive targeting
+        if (this.aiDifficulty === 'hard') {
+            candidateChoices.sort((a, b) => {
+                if (a.lethal !== b.lethal) return b.lethal - a.lethal;
+                if (a.willKill !== b.willKill) return b.willKill - a.willKill;
+                // Prioritize high attack targets more
+                if (a.targetAttack !== b.targetAttack) return (b.targetAttack * 1.5) - (a.targetAttack * 1.5);
+                if (a.damage !== b.damage) return b.damage - a.damage;
+                if (a.targetHp !== b.targetHp) return a.targetHp - b.targetHp;
+                return b.attackerAttack - a.attackerAttack;
+            });
+        } else {
+            candidateChoices.sort((a, b) => {
+                if (a.lethal !== b.lethal) return b.lethal - a.lethal;
+                if (a.willKill !== b.willKill) return b.willKill - a.willKill;
+                if (a.targetAttack !== b.targetAttack) return b.targetAttack - a.targetAttack;
+                if (a.damage !== b.damage) return b.damage - a.damage;
+                if (a.targetHp !== b.targetHp) return a.targetHp - b.targetHp;
+                return b.attackerAttack - a.attackerAttack;
+            });
+        }
 
         const choice = candidateChoices[0];
         const success = this.attackWithMonster(player, choice.attackerIndex, opponent, choice.targetPosition);
@@ -839,6 +961,16 @@ class CardGame {
         document.getElementById('end-turn-btn').addEventListener('click', () => {
             if (this.isComputerTurn()) return;
             this.endTurn();
+        });
+
+        // Difficulty selection
+        document.querySelectorAll('.difficulty-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.difficulty-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                this.aiDifficulty = e.target.dataset.difficulty;
+                this.log(`AI難易度を「${e.target.textContent}」に変更しました。`);
+            });
         });
     }
 
@@ -883,6 +1015,164 @@ class CardGame {
 
     isComputerTurn() {
         return this.isComputerPlayer(this.gameState.currentPlayer);
+    }
+
+    // Trigger abilities based on timing
+    triggerAbility(card, timing, player) {
+        const opponent = player === 1 ? 2 : 1;
+
+        switch(timing) {
+            case 'summon':
+                if (card.ability === 'greed') {
+                    // Goblin: Gain 1 gem on summon
+                    this.players[player].gems += 1;
+                    this.log(`${card.name}の強欲！ジェムを1獲得！`);
+                } else if (card.ability === 'magic') {
+                    // Wizard: Deal 1 damage to enemy front row monster on summon
+                    const frontMonsters = [0, 1].map(pos => this.players[opponent].battlefield[pos]).filter(m => m !== null);
+                    if (frontMonsters.length > 0) {
+                        const target = frontMonsters[Math.floor(Math.random() * frontMonsters.length)];
+                        const targetPos = this.players[opponent].battlefield.indexOf(target);
+                        target.hp -= 1;
+                        this.log(`${card.name}の魔法攻撃！${target.name}に1ダメージ！`);
+                        if (target.hp <= 0) {
+                            this.players[opponent].battlefield[targetPos] = null;
+                            this.log(`${target.name}は破壊されました！`);
+                            this.players[opponent].gems += 1;
+                            this.moveBackRowToFront(opponent);
+                        }
+                    }
+                }
+                break;
+        }
+    }
+
+    triggerTurnStartAbilities(player) {
+        const battlefield = this.players[player].battlefield;
+        battlefield.forEach((monster, pos) => {
+            if (monster && monster.ability === 'regenerate') {
+                // Troll: Regenerate 1 HP at turn start
+                if (monster.hp < monster.maxHp) {
+                    monster.hp += 1;
+                    this.log(`${monster.name}の再生！HP+1回復！`);
+                }
+            }
+        });
+    }
+
+    calculateGuardReduction(player) {
+        // Check if player has Knights in front row
+        let reduction = 0;
+        const frontPositions = [POSITION.FRONT_LEFT, POSITION.FRONT_RIGHT];
+        frontPositions.forEach(pos => {
+            const monster = this.players[player].battlefield[pos];
+            if (monster && monster.ability === 'guard') {
+                reduction += 1;
+            }
+        });
+        return reduction;
+    }
+
+    showGameStats(winner) {
+        const loser = winner === 1 ? 2 : 1;
+        const winnerStats = this.players[winner].stats;
+        const loserStats = this.players[loser].stats;
+
+        const statsMessage = `
+━━━━━━━━ ゲーム終了 ━━━━━━━━
+
+🏆 プレイヤー${winner}の勝利！
+
+📊 ゲーム統計
+────────────────────────
+総ターン数: ${this.gameState.turnNumber}
+
+プレイヤー${winner} (勝者):
+  与ダメージ: ${winnerStats.damageDealt}
+  被ダメージ: ${winnerStats.damageTaken}
+  召喚数: ${winnerStats.monstersSummoned}
+  撃破数: ${winnerStats.monstersDestroyed}
+  消費ジェム: ${winnerStats.gemsSpent}
+  残りライフ: ${this.players[winner].life}
+
+プレイヤー${loser} (敗者):
+  与ダメージ: ${loserStats.damageDealt}
+  被ダメージ: ${loserStats.damageTaken}
+  召喚数: ${loserStats.monstersSummoned}
+  撃破数: ${loserStats.monstersDestroyed}
+  消費ジェム: ${loserStats.gemsSpent}
+  残りライフ: ${this.players[loser].life}
+────────────────────────
+        `.trim();
+
+        alert(statsMessage);
+    }
+
+    // Sound effects using Web Audio API
+    playSound(type) {
+        if (!this.audioContext) return;
+
+        const now = this.audioContext.currentTime;
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+
+        switch(type) {
+            case 'summon':
+                // Upward sweep for summoning
+                oscillator.frequency.setValueAtTime(200, now);
+                oscillator.frequency.exponentialRampToValueAtTime(800, now + 0.2);
+                gainNode.gain.setValueAtTime(0.3, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                oscillator.start(now);
+                oscillator.stop(now + 0.2);
+                break;
+
+            case 'attack':
+                // Sharp attack sound
+                oscillator.frequency.setValueAtTime(400, now);
+                oscillator.frequency.exponentialRampToValueAtTime(100, now + 0.15);
+                gainNode.gain.setValueAtTime(0.4, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                oscillator.type = 'square';
+                oscillator.start(now);
+                oscillator.stop(now + 0.15);
+                break;
+
+            case 'damage':
+                // Impact sound
+                oscillator.frequency.setValueAtTime(150, now);
+                oscillator.frequency.exponentialRampToValueAtTime(50, now + 0.1);
+                gainNode.gain.setValueAtTime(0.5, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                oscillator.type = 'sawtooth';
+                oscillator.start(now);
+                oscillator.stop(now + 0.1);
+                break;
+
+            case 'turnEnd':
+                // Pleasant chime for turn end
+                oscillator.frequency.setValueAtTime(523.25, now); // C5
+                oscillator.frequency.setValueAtTime(659.25, now + 0.1); // E5
+                gainNode.gain.setValueAtTime(0.2, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                oscillator.start(now);
+                oscillator.stop(now + 0.3);
+                break;
+
+            case 'victory':
+                // Victory fanfare
+                oscillator.frequency.setValueAtTime(523.25, now); // C5
+                oscillator.frequency.setValueAtTime(659.25, now + 0.15); // E5
+                oscillator.frequency.setValueAtTime(783.99, now + 0.3); // G5
+                gainNode.gain.setValueAtTime(0.3, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                oscillator.start(now);
+                oscillator.stop(now + 0.5);
+                break;
+        }
     }
 }
 
