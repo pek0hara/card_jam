@@ -81,10 +81,12 @@ class CardGame {
         this.abilityPopupClose = null;
         this.lastAbilityTrigger = null;
         this.handleAbilityKeydown = this.handleAbilityKeydown.bind(this);
+        this.displayScale = 'medium';
 
         this.initializeGame();
         this.setupEventListeners();
         this.setupAbilityPopup();
+        this.setupDisplayControls();
     }
 
     initializeGame() {
@@ -1000,6 +1002,63 @@ class CardGame {
                 this.aiDifficulty = e.target.dataset.difficulty;
                 this.log(`AI難易度を「${e.target.textContent}」に変更しました。`);
             });
+        });
+    }
+
+    setupDisplayControls() {
+        const displayButtons = document.querySelectorAll('.display-btn');
+        if (!displayButtons.length) {
+            return;
+        }
+
+        const storedScale = (() => {
+            try {
+                return localStorage.getItem('cardGameDisplayScale');
+            } catch (error) {
+                console.warn('画面サイズ設定を保存できませんでした。', error);
+                return null;
+            }
+        })();
+
+        const initialScale = ['small', 'medium', 'large'].includes(storedScale) ? storedScale : 'medium';
+        this.applyDisplayScale(initialScale);
+
+        displayButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const scale = button.dataset.scale;
+                if (!scale) {
+                    return;
+                }
+
+                this.applyDisplayScale(scale);
+
+                try {
+                    localStorage.setItem('cardGameDisplayScale', scale);
+                } catch (error) {
+                    console.warn('画面サイズ設定を保存できませんでした。', error);
+                }
+            });
+        });
+    }
+
+    applyDisplayScale(scale) {
+        const validScales = ['small', 'medium', 'large'];
+        if (!validScales.includes(scale)) {
+            return;
+        }
+
+        validScales.forEach(value => {
+            document.body.classList.remove(`scale-${value}`);
+        });
+
+        document.body.classList.add(`scale-${scale}`);
+        this.displayScale = scale;
+
+        const buttons = document.querySelectorAll('.display-btn');
+        buttons.forEach(button => {
+            const isActive = button.dataset.scale === scale;
+            button.classList.toggle('active', isActive);
+            button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         });
     }
 
