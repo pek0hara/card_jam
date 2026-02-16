@@ -11,6 +11,17 @@ const ROW = {
     BACK: 1
 };
 
+const CARD_IMAGE_MAP = {
+    "ゴブリン": "img/Goblin.PNG",
+    "スライム": "img/Slime.PNG",
+    "オーク": "img/Orc.PNG",
+    "スケルトン": "img/Skeleton.PNG",
+    "トロール": "img/Troll.PNG",
+    "ナイト": "img/Knight.PNG",
+    "ウィザード": "img/Wizard.PNG",
+    "ドラゴン": "img/Dragon.PNG"
+};
+
 class CardGame {
     constructor() {
         const firstPlayer = Math.random() < 0.5 ? 1 : 2;
@@ -468,6 +479,7 @@ class CardGame {
                     <span class="card-name-text">${card.name}</span>
                     <span class="card-cost">[${card.cost}]</span>
                 </div>
+                <img class="card-image" src="${this.getCardImagePath(card.name)}" alt="${card.name}">
                 <div class="card-stats">
                     <span>HP:${card.hp}</span>
                     <span>ATK:${card.attack}</span>
@@ -496,6 +508,7 @@ class CardGame {
                 monsterElement.className = 'monster';
                 monsterElement.innerHTML = `
                     <div class="monster-name">${monster.name}</div>
+                    <img class="monster-image" src="${this.getCardImagePath(monster.name)}" alt="${monster.name}">
                     <div class="monster-stats">
                         <span>HP: ${monster.hp}/${monster.maxHp}</span>
                         <span>ATK: ${monster.attack}</span>
@@ -514,6 +527,10 @@ class CardGame {
                 slot.classList.add('empty-slot');
             }
         });
+    }
+
+    getCardImagePath(cardName) {
+        return CARD_IMAGE_MAP[cardName] || '';
     }
 
     selectCard(cardIndex) {

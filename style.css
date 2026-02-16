@@ -146,7 +146,7 @@ body {
     border-radius: 6px;
     padding: 5px;
     width: 75px !important;
-    height: 50px !important;
+    height: 82px !important;
     min-width: 75px;
     max-width: 75px;
     cursor: pointer;
@@ -155,7 +155,7 @@ body {
     color: white;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     text-align: center;
     box-sizing: border-box;
     flex: none;
@@ -184,7 +184,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 3px;
+    margin-bottom: 2px;
     color: white;
     gap: 3px;
     font-size: 9px;
@@ -205,9 +205,16 @@ body {
     justify-content: center;
     align-items: center;
     gap: 4px;
-    font-size: 8px;
+    font-size: 7px;
     color: white;
     flex-wrap: wrap;
+}
+
+.card-image {
+    width: 100%;
+    height: 36px;
+    object-fit: contain;
+    margin-bottom: 2px;
 }
 
 .card-stats span {
@@ -272,7 +279,7 @@ body {
     height: 100%;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     text-align: center;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -286,15 +293,22 @@ body {
 
 .monster-name {
     font-weight: bold;
-    margin-bottom: 6px;
-    font-size: 13px;
+    margin-bottom: 2px;
+    font-size: 10px;
 }
 
 .monster-stats {
     display: flex;
     justify-content: space-around;
-    font-size: 11px;
+    font-size: 9px;
     font-weight: bold;
+}
+
+.monster-image {
+    width: 100%;
+    height: 24px;
+    object-fit: contain;
+    margin-bottom: 2px;
 }
 
 #game-log {
@@ -319,4 +333,3 @@ body {
     border-radius: 5px;
     border-left: 3px solid #4299e1;
 }
-
