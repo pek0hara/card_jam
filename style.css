@@ -51,11 +51,13 @@ body {
     border-radius: 5px;
     cursor: pointer;
     font-weight: bold;
-    transition: background-color 0.3s;
+    transition: background-color 0.3s, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 #end-turn-btn:hover {
     background: #3182ce;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(49, 130, 206, 0.35);
 }
 
 #game-board {
@@ -72,6 +74,11 @@ body {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.player-area.active-turn {
+    box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.35), 0 8px 18px rgba(66, 153, 225, 0.2);
 }
 
 
@@ -333,4 +340,65 @@ body {
     background: #f7fafc;
     border-radius: 5px;
     border-left: 3px solid #4299e1;
+    animation: logSlideIn 0.25s ease-out;
+}
+
+.stat-bump-up {
+    animation: statBumpUp 0.32s ease;
+}
+
+.stat-bump-down {
+    animation: statBumpDown 0.32s ease;
+}
+
+@keyframes logSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes statBumpUp {
+    0% {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+    40% {
+        transform: scale(1.12);
+        filter: brightness(1.12);
+    }
+    100% {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+}
+
+@keyframes statBumpDown {
+    0% {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+    40% {
+        transform: scale(0.9);
+        filter: brightness(0.92);
+    }
+    100% {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #log-content div,
+    .stat-bump-up,
+    .stat-bump-down,
+    .player-area,
+    #end-turn-btn {
+        animation: none !important;
+        transition: none !important;
+    }
 }
