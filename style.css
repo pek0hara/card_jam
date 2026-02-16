@@ -79,7 +79,6 @@ body {
 
 .player-area.active-turn {
     box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.35), 0 8px 18px rgba(66, 153, 225, 0.2);
-    transform: translateY(-1px);
 }
 
 
@@ -167,7 +166,6 @@ body {
     text-align: center;
     box-sizing: border-box;
     flex: none;
-    animation: cardEnter 0.22s ease-out;
 }
 
 .card:hover {
@@ -300,7 +298,6 @@ body {
     cursor: pointer;
     transition: all 0.3s ease;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
-    animation: monsterEnter 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .monster:hover {
@@ -346,30 +343,12 @@ body {
     animation: logSlideIn 0.25s ease-out;
 }
 
-.stat-bump {
-    animation: statBump 0.32s ease;
+.stat-bump-up {
+    animation: statBumpUp 0.32s ease;
 }
 
-@keyframes cardEnter {
-    from {
-        opacity: 0;
-        transform: translateY(6px) scale(0.98);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
-@keyframes monsterEnter {
-    from {
-        opacity: 0;
-        transform: scale(0.94);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
+.stat-bump-down {
+    animation: statBumpDown 0.32s ease;
 }
 
 @keyframes logSlideIn {
@@ -383,23 +362,40 @@ body {
     }
 }
 
-@keyframes statBump {
+@keyframes statBumpUp {
     0% {
         transform: scale(1);
+        filter: brightness(1);
     }
     40% {
-        transform: scale(1.13);
+        transform: scale(1.12);
+        filter: brightness(1.12);
     }
     100% {
         transform: scale(1);
+        filter: brightness(1);
+    }
+}
+
+@keyframes statBumpDown {
+    0% {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+    40% {
+        transform: scale(0.9);
+        filter: brightness(0.92);
+    }
+    100% {
+        transform: scale(1);
+        filter: brightness(1);
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .card,
-    .monster,
     #log-content div,
-    .stat-bump,
+    .stat-bump-up,
+    .stat-bump-down,
     .player-area,
     #end-turn-btn {
         animation: none !important;

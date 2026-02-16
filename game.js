@@ -473,10 +473,18 @@ class CardGame {
         element.textContent = value;
 
         if (previousValue !== undefined && previousValue !== value) {
-            element.classList.remove('stat-bump');
+            element.classList.remove('stat-bump-up', 'stat-bump-down');
             // Force reflow so repeated animation reliably triggers.
             void element.offsetWidth;
-            element.classList.add('stat-bump');
+
+            const prevNum = Number(previousValue);
+            const nextNum = Number(value);
+            const isNumericChange = !Number.isNaN(prevNum) && !Number.isNaN(nextNum);
+            const animationClass = isNumericChange && nextNum < prevNum
+                ? 'stat-bump-down'
+                : 'stat-bump-up';
+
+            element.classList.add(animationClass);
         }
 
         if (!this.previousPlayerStats[player]) {
