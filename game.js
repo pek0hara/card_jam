@@ -477,12 +477,12 @@ class CardGame {
             cardElement.innerHTML = `
                 <div class="card-name">
                     <span class="card-name-text">${card.name}</span>
-                    <span class="card-cost">[${card.cost}]</span>
+                    <span class="card-cost">${card.cost}</span>
                 </div>
                 <img class="card-image" src="${this.getCardImagePath(card.name)}" alt="${card.name}">
                 <div class="card-stats">
-                    <span>HP:${card.hp}</span>
-                    <span>ATK:${card.attack}</span>
+                    <span class="stat-value">${card.hp}</span>
+                    <span class="stat-value">${card.attack}</span>
                 </div>
             `;
 
@@ -510,8 +510,8 @@ class CardGame {
                     <div class="monster-name">${monster.name}</div>
                     <img class="monster-image" src="${this.getCardImagePath(monster.name)}" alt="${monster.name}">
                     <div class="monster-stats">
-                        <span>HP: ${monster.hp}/${monster.maxHp}</span>
-                        <span>ATK: ${monster.attack}</span>
+                        <span>${monster.hp}/${monster.maxHp}</span>
+                        <span>${monster.attack}</span>
                     </div>
                 `;
                 
