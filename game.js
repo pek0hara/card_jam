@@ -507,7 +507,6 @@ class CardGame {
                 const monsterElement = document.createElement('div');
                 monsterElement.className = 'monster';
                 monsterElement.innerHTML = `
-                    <div class="monster-name">${monster.name}</div>
                     <img class="monster-image" src="${this.getCardImagePath(monster.name)}" alt="${monster.name}">
                     <div class="monster-stats">
                         <span>${monster.hp}/${monster.maxHp}</span>

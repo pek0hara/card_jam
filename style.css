@@ -298,12 +298,6 @@ body {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
-.monster-name {
-    font-weight: bold;
-    margin-bottom: 2px;
-    font-size: 10px;
-}
-
 .monster-stats {
     display: flex;
     justify-content: space-around;
