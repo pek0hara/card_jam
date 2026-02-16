@@ -307,7 +307,7 @@ body {
 
 .monster-image {
     width: 100%;
-    height: 24px;
+    height: 30px;
     object-fit: contain;
     margin-bottom: 2px;
 }
