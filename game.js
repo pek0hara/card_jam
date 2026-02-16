@@ -61,6 +61,7 @@ class CardGame {
         this.computerPlayers = new Set([2]);
 
         this.selectedCard = null;
+        this.previousPlayerStats = {};
 
         this.computerTurnTimeout = null;
         this.autoEndTurnTimeout = null;
@@ -430,10 +431,13 @@ class CardGame {
 
     updateUI() {
         for (let player = 1; player <= 2; player++) {
-            document.getElementById(`player${player}-life`).textContent = this.players[player].life;
-            document.getElementById(`player${player}-gems`).textContent = this.players[player].gems;
+            const playerArea = document.getElementById(`player${player}-area`);
+            playerArea.classList.toggle('active-turn', player === this.gameState.currentPlayer);
 
-            // Display action points as circles
+            const lifeElement = document.getElementById(`player${player}-life`);
+            const gemsElement = document.getElementById(`player${player}-gems`);
+            const actionElement = document.getElementById(`player${player}-action`);
+
             const actionPoints = this.players[player].actionPoints;
             let actionDisplay = '';
             if (actionPoints === 2) {
@@ -443,8 +447,11 @@ class CardGame {
             } else {
                 actionDisplay = '⚪︎⚪︎';
             }
-            document.getElementById(`player${player}-action`).textContent = actionDisplay;
-            
+
+            this.updateStatWithAnimation(player, 'life', this.players[player].life, lifeElement);
+            this.updateStatWithAnimation(player, 'gems', this.players[player].gems, gemsElement);
+            this.updateStatWithAnimation(player, 'action', actionDisplay, actionElement);
+
             this.renderHand(player);
             this.renderBattlefield(player);
         }
@@ -457,6 +464,25 @@ class CardGame {
             endTurnBtn.disabled = false;
             endTurnBtn.textContent = 'ターン終了';
         }
+    }
+
+    updateStatWithAnimation(player, statKey, value, element) {
+        if (!element) return;
+
+        const previousValue = this.previousPlayerStats[player]?.[statKey];
+        element.textContent = value;
+
+        if (previousValue !== undefined && previousValue !== value) {
+            element.classList.remove('stat-bump');
+            // Force reflow so repeated animation reliably triggers.
+            void element.offsetWidth;
+            element.classList.add('stat-bump');
+        }
+
+        if (!this.previousPlayerStats[player]) {
+            this.previousPlayerStats[player] = {};
+        }
+        this.previousPlayerStats[player][statKey] = value;
     }
 
     renderHand(player) {
