@@ -515,8 +515,8 @@ class CardGame {
                 </div>
                 <img class="card-image" src="${this.getCardImagePath(card.name)}" alt="${card.name}">
                 <div class="card-stats">
-                    <span class="stat-value">${card.hp}</span>
-                    <span class="stat-value">${card.attack}</span>
+                    <span class="stat-pill hp-stat"><img class="stat-icon" src="img/heart.svg" alt="体力"><span class="stat-value">${card.hp}</span></span>
+                    <span class="stat-pill attack-stat"><img class="stat-icon" src="img/sword.svg" alt="攻撃"><span class="stat-value">${card.attack}</span></span>
                 </div>
             `;
 
@@ -543,8 +543,8 @@ class CardGame {
                 monsterElement.innerHTML = `
                     <img class="monster-image" src="${this.getCardImagePath(monster.name)}" alt="${monster.name}">
                     <div class="monster-stats">
-                        <span>${monster.hp}/${monster.maxHp}</span>
-                        <span>${monster.attack}</span>
+                        <span class="stat-pill hp-stat"><img class="stat-icon" src="img/heart.svg" alt="体力"><span>${monster.hp}/${monster.maxHp}</span></span>
+                        <span class="stat-pill attack-stat"><img class="stat-icon" src="img/sword.svg" alt="攻撃"><span>${monster.attack}</span></span>
                     </div>
                 `;
                 
