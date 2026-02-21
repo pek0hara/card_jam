@@ -13,6 +13,8 @@ body {
 }
 
 #game-container {
+    width: min(100%, 960px);
+    margin: 0 auto;
     padding: 8px;
     display: flex;
     flex-direction: column;
@@ -247,7 +249,7 @@ body {
     gap: 6px;
     margin: 0 auto 8px;
     width: 100%;
-    max-width: 360px;
+    max-width: 100%;
 }
 
 /* プレイヤー2（相手）の盤面は前列と後列を入れ替え */
@@ -400,5 +402,57 @@ body {
     #end-turn-btn {
         animation: none !important;
         transition: none !important;
+    }
+}
+
+@media (max-width: 768px) {
+    #game-container {
+        padding: 10px;
+        gap: 8px;
+    }
+
+    .player-area {
+        padding: 10px 10px 8px;
+        gap: 8px;
+    }
+
+    .hand {
+        gap: 6px;
+    }
+
+    .card {
+        width: calc((100vw - 52px) / 4) !important;
+        min-width: 80px;
+        max-width: 98px;
+        height: clamp(88px, 24vw, 110px) !important;
+    }
+
+    .card-image {
+        height: clamp(34px, 10vw, 44px);
+    }
+
+    .battlefield {
+        gap: 8px;
+    }
+
+    .field-slot {
+        min-height: 76px;
+        aspect-ratio: 3 / 2;
+    }
+
+    .monster {
+        padding: 6px 8px;
+        justify-content: center;
+        gap: 6px;
+    }
+
+    .monster-image {
+        height: clamp(28px, 9vw, 38px);
+        margin-bottom: 0;
+    }
+
+    .monster-stats {
+        font-size: 14px;
+        line-height: 1;
     }
 }
