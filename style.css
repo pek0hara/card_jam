@@ -227,18 +227,32 @@ body {
     margin-bottom: 2px;
 }
 
-.card-stats span {
-    position: relative;
-}
-
-.card-stats span + span::before {
-    content: '/';
-    margin-right: 4px;
-    color: rgba(255, 255, 255, 0.6);
-}
-
 .card-stats .stat-value {
     font-variant-numeric: tabular-nums;
+}
+
+
+.stat-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 4px;
+    border-radius: 999px;
+    background: rgba(17, 24, 39, 0.28);
+}
+
+.hp-stat {
+    background: rgba(229, 62, 62, 0.24);
+}
+
+.attack-stat {
+    background: rgba(45, 55, 72, 0.24);
+}
+
+.stat-icon {
+    width: 12px;
+    height: 12px;
+    display: block;
 }
 
 .battlefield {
@@ -307,8 +321,10 @@ body {
 
 .monster-stats {
     display: flex;
-    justify-content: space-around;
-    font-size: 12px;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
     font-weight: bold;
 }
 
