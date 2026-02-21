@@ -243,12 +243,11 @@ body {
 
 .battlefield {
     display: grid;
-    grid-template-columns: repeat(2, 90px);
-    grid-template-rows: repeat(2, 60px);
-    gap: 1px;
-    margin-bottom: 8px;
-    height: 121px;
-    justify-content: center;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin: 0 auto 8px;
+    width: 100%;
+    max-width: 360px;
 }
 
 /* プレイヤー2（相手）の盤面は前列と後列を入れ替え */
@@ -264,8 +263,9 @@ body {
 #player2-battlefield .field-slot[data-position="3"] { grid-area: back-right; }
 
 .field-slot {
-    width: 90px;
-    height: 60px;
+    width: 100%;
+    min-height: 72px;
+    aspect-ratio: 3 / 2;
     border: 2px dashed #cbd5e0;
     border-radius: 8px;
     display: flex;
