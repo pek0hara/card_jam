@@ -171,3 +171,50 @@ test('左右移動で前列が空いたら後列は自動前進する', () => {
     const g=game();g.players[1].battlefield=[monster('a'),null,monster('reserve'),null];g.moveSideways(1,0);
     assert.equal(g.players[1].battlefield[0].id,'reserve');assert.equal(g.players[1].battlefield[1].id,'a');
 });
+
+// v1.6
+test('AIは攻撃→交代→攻撃の組み合わせで勝てる手順を見つける', () => {
+    const g=game(); g.gameState.currentPlayer=2; g.players[1].life=7; g.players[2].energy=1;
+    const knight={...monster('k'),attack:3,hp:3}, dragon={...monster('d'),attack:4,hp:4};
+    g.players[2].battlefield=[knight,null,dragon,null];
+    for (let i=0;i<8&&!g.gameState.gameOver;i++) if(!g.performComputerAction(2)) break;
+    assert.equal(g.gameState.winner,2);
+});
+test('勝ち筋探索は実際の盤面を変更しない', () => {
+    const g=game(); g.gameState.currentPlayer=2; g.players[1].life=99;
+    g.players[2].battlefield=[monster('a'),null,monster('b'),null];
+    assert.equal(g.findLethalPlan(2),null);
+    assert.equal(g.players[2].energy,4); assert.equal(g.players[2].battlefield[0].hasAttacked,false); assert.equal(g.players[1].life,99);
+});
+test('AIは交代しても攻撃できない後列モンスターを交代しない', () => {
+    const g=game(); g.gameState.currentPlayer=2;
+    const front=monster('front'); front.hasAttacked=true;
+    const fresh=monster('fresh'); fresh.summonedTurn=g.gameState.turnNumber;
+    g.players[2].battlefield=[front,null,fresh,null];
+    assert.equal(g.computerSwap(2),false); assert.equal(g.players[2].energy,4);
+    fresh.summonedTurn=1; assert.equal(g.computerSwap(2),true);
+});
+test('先攻も最初の手番にドローし、後攻の最初の手番はコスト3', () => {
+    const g=game(); g.gameState.firstPlayer=1; g.gameState.currentPlayer=1;
+    for (const p of [1,2]) Object.assign(g.players[p],{turnsTaken:0,firstTurnCompleted:false,hand:[monster('h')],deck:[monster('d1'),monster('d2')]});
+    g.startTurn(1); assert.equal(g.players[1].hand.length,2); assert.equal(g.players[1].maxEnergy,2);
+    g.endTurn(); assert.equal(g.players[2].hand.length,2); assert.equal(g.players[2].maxEnergy,3);
+    g.endTurn(); assert.equal(g.players[1].maxEnergy,3);
+    g.endTurn(); assert.equal(g.players[2].maxEnergy,3);
+    g.endTurn(); g.endTurn(); assert.equal(g.players[2].maxEnergy,4);
+});
+test('攻撃予告は撃破・反撃・直接攻撃を区別する', () => {
+    const g=game(); const a={...monster('a'),attack:3,hp:2};
+    g.players[1].battlefield[0]=a;
+    assert.match(g.previewAttack(1,0).short,/本体に3/);
+    g.players[2].battlefield[0]={...monster('t'),hp:3,attack:1}; assert.match(g.previewAttack(1,0).short,/撃破/);
+    g.players[2].battlefield[0]={...monster('t'),hp:5,attack:2}; const p=g.previewAttack(1,0);
+    assert.equal(p.dies,true); assert.match(p.short,/反撃で倒れる/);
+    g.players[2].battlefield[0]={...monster('t'),hp:5,attack:1}; assert.match(g.previewAttack(1,0).short,/反撃1/);
+});
+test('ログの主語はあなた/AIで表示する', () => {
+    const g=game(); g.computerPlayers=new Set([2]); const logs=[]; g.log=m=>logs.push(m);
+    g.players[1].battlefield[0]=monster(); g.attackWithMonster(1,0,2);
+    assert.ok(logs.some(m=>m.includes('AIに2ダメージ'))); assert.ok(!logs.some(m=>m.includes('プレイヤー')));
+});
+
