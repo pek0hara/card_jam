@@ -225,17 +225,40 @@ test('召喚直後のモンスターは、直後の相手手番だけ受ける�
     g.gameState.turnNumber++; g.gameState.currentPlayer=1;
     const a={...monster('a'),attack:3,hp:9}; g.players[1].battlefield[0]=a;
     assert.equal(g.isGuarded(fresh),true); assert.equal(g.damageTo(a,fresh),2);
-    assert.match(g.previewAttack(1,0).detail,/守りで-1/);
+    assert.match(g.previewAttack(1,0).detail,/防御\+1/);
     g.attackWithMonster(1,0,2,0); assert.equal(fresh.hp,1);
     g.gameState.turnNumber+=2; assert.equal(g.isGuarded(fresh),false); assert.equal(g.damageTo(a,fresh),3);
 });
-test('守りは本体への直接攻撃に影響しない', () => {
+test('召喚直後の防御は本体への直接攻撃に影響しない', () => {
     const g=game(); const a={...monster('a'),attack:3}; g.players[1].battlefield[0]=a;
     g.attackWithMonster(1,0,2); assert.equal(g.players[2].life,17);
 });
-test('AIは守りでダメージ0になる攻撃をしない', () => {
+test('AIは防御でダメージ0になる攻撃をしない', () => {
     const g=game(); g.gameState.currentPlayer=2;
     g.players[2].battlefield[0]={...monster('weak'),attack:1,summonedTurn:1};
     g.players[1].battlefield[0]={...monster('fresh'),summonedTurn:g.gameState.turnNumber-1};
     assert.equal(g.computerAttackChoices(2).length,0);
+});
+
+// v1.8
+test('開始ライフは15、貫通先は後列', () => {
+    assert.equal(vm.runInContext('RULES.startingLife', context),15);
+    assert.equal(vm.runInContext('RULES.trample', context),'back');
+});
+test('倒した余剰ダメージは同じ列の後列へ貫通し、後列がいなければ本体へ', () => {
+    const g=game(); const a={...monster('a'),attack:5};
+    const front={...monster('f'),hp:2}, back={...monster('b'),hp:4};
+    g.players[1].battlefield[0]=a; g.players[2].battlefield=[front,null,back,null];
+    assert.match(g.previewAttack(1,0).short,/撃破\+オーク3/);
+    g.attackWithMonster(1,0,2,0);
+    assert.equal(back.hp,1); assert.equal(g.players[2].battlefield[0],back); assert.equal(g.players[2].life,20);
+    const b={...monster('b2'),attack:4}; g.players[1].battlefield[1]=b; g.players[2].battlefield[1]={...monster('f2'),hp:1};
+    assert.match(g.previewAttack(1,1).short,/撃破\+本体3/);
+    g.attackWithMonster(1,1,2,1); assert.equal(g.players[2].life,17);
+});
+test('貫通で後列を倒しても、それ以上は本体に届かない', () => {
+    const g=game(); g.players[1].battlefield[0]={...monster('a'),attack:9};
+    g.players[2].battlefield=[{...monster('f'),hp:1},null,{...monster('b'),hp:2},null];
+    g.attackWithMonster(1,0,2,0);
+    assert.equal(g.players[2].battlefield[0],null); assert.equal(g.players[2].battlefield[2],null); assert.equal(g.players[2].life,20);
 });

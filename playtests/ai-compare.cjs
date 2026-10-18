@@ -43,7 +43,7 @@ function play(n, policies) {
     const first = n % 2 + 1;
     g.gameState = { currentPlayer: first, firstPlayer: first, turnNumber: 1, gameOver: false };
     g.players = {};
-    for (const p of [1, 2]) g.players[p] = { life: 20, energy: 0, maxEnergy: 0, turnsTaken: 0, hand: [], deck: [], battlefield: [null, null, null, null], firstTurnCompleted: false, canAttackThisTurn: false, fatigue: 0, swappedColumns: new Set() };
+    for (const p of [1, 2]) g.players[p] = { life: vm.runInContext('RULES.startingLife', c), energy: 0, maxEnergy: 0, turnsTaken: 0, hand: [], deck: [], battlefield: [null, null, null, null], firstTurnCompleted: false, canAttackThisTurn: false, fatigue: 0, swappedColumns: new Set() };
     g.computerPlayers = new Set();
     g.log = g.updateUI = g.scheduleComputerTurn = () => {};
     g.createDecks(); g.drawInitialHands(); g.startTurn(first);

@@ -559,3 +559,13 @@ body {
 /* v1.7：召喚直後の守り */
 .monster.guarded { box-shadow: 0 0 0 2px #90cdf4, 0 2px 4px rgba(0, 0, 0, 0.18); }
 .guard-badge { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 999px; background: #bee3f8; color: #2a4365; font-size: 10px; font-weight: bold; line-height: 15px; }
+
+/* v1.8：マナ表示と行動の強調 */
+.mana-gems { color: #2b6cb0; letter-spacing: 1px; }
+.card-cost::before { content: '◆'; font-size: 10px; margin-right: 1px; color: #bee3f8; }
+.monster.flash { animation: actionFlash 0.6s ease-out; }
+@keyframes actionFlash {
+    0% { box-shadow: 0 0 0 4px #f6e05e, 0 0 14px 4px rgba(246, 224, 94, 0.9); }
+    100% { box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18); }
+}
+@media (prefers-reduced-motion: reduce) { .monster.flash { animation: none; outline: 3px solid #f6e05e; } }
