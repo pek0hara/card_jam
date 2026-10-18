@@ -281,7 +281,7 @@ body {
 .field-slot {
     width: 100%;
     min-height: 72px;
-    aspect-ratio: 3 / 2;
+    height: 82px;
     border: 2px dashed #cbd5e0;
     border-radius: 8px;
     display: flex;
@@ -453,7 +453,7 @@ body {
 
     .field-slot {
         min-height: 76px;
-        aspect-ratio: 3 / 2;
+        height: 82px;
     }
 
     .monster {
@@ -472,3 +472,90 @@ body {
         line-height: 1;
     }
 }
+
+.game-header { display:flex; align-items:center; gap:12px; padding:8px; flex-wrap:wrap; }
+#turn-status { flex:1; font-size:13px; }
+#restart-btn { padding:7px 12px; border:1px solid #cbd5e0; border-radius:6px; background:white; cursor:pointer; }
+.rules { padding:8px 12px; background:white; border-radius:8px; font-size:12px; line-height:1.6; }
+.rules summary { cursor:pointer; font-weight:bold; }
+.rules p { margin-top:6px; }
+.combat-guide { padding:6px 10px; font-size:12px; line-height:1.5; color:#2b6cb0; background:#ebf8ff; border-radius:6px; }
+.field-slot { position:relative; }
+.field-slot:empty::after { content:attr(data-label); color:#718096; font-size:12px; }
+.monster-label { font-size:11px; line-height:16px; }
+.monster.exhausted { background:#64748b; }
+.card.unaffordable { opacity:0.55; }
+.card-stats { flex-wrap:nowrap; gap:2px; font-size:11px; }
+.card-stats .stat-pill { padding:1px 2px; }
+#end-turn-btn:disabled { background:#718096; cursor:default; transform:none; }
+#game-log { flex-basis:120px; height:120px; }
+
+.energy { background: #bee3f8 !important; color: #2b6cb0 !important; }
+.field-slot { height: 108px; }
+.monster { padding: 5px; gap: 1px; }
+.monster-actions { display:flex; justify-content:center; margin-top:auto; }
+.monster-actions button { background:#edf2f7; color:#2d3748; border:0; border-radius:4px; padding:4px 10px; font-size:12px; cursor:pointer; }
+.monster-actions button:disabled { opacity:.45; cursor:default; }
+.monster-image { height:26px; }
+
+/* v1.6：明示的な行動ボタン、山札表示、画面配置 */
+.monster { flex-direction: row; align-items: center; gap: 6px; text-align: left; cursor: default; }
+.monster:hover { transform: none; }
+.monster-image { flex: 0 0 auto; width: 44px; height: 44px; margin: 0; }
+.monster-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+.monster-label { font-weight: bold; }
+.monster-label small { font-weight: normal; opacity: .9; }
+.monster-stats { justify-content: flex-start; }
+.monster-actions { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-start; margin-top: 0; }
+.monster-actions button { padding: 3px 8px; font-size: 12px; line-height: 1.3; }
+.monster-actions button.attack { background: #fefcbf; color: #744210; font-weight: bold; }
+.monster-actions button.attack.danger { background: #fed7d7; color: #9b2c2c; }
+.monster-actions button:focus-visible, .card:focus-visible, .field-slot:focus-visible, #end-turn-btn:focus-visible, #restart-btn:focus-visible {
+    outline: 3px solid #f6ad55; outline-offset: 2px;
+}
+.field-slot { height: 76px; min-height: 76px; }
+.deck, .handcount { background: #edf2f7; }
+.player-stats span.deck.warning { background: #feebc8 !important; color: #9c4221 !important; }
+.player-stats span span { padding: 0; background: none; }
+#restart-btn.confirming { background: #fff5f5; border-color: #e53e3e; color: #c53030; font-weight: bold; }
+#player2-hand .card { cursor: default; }
+#player2-hand .card:hover { transform: none; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18); }
+
+@media (min-width: 900px) {
+    #game-container {
+        width: min(100%, 1180px);
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 260px;
+        grid-template-areas: "header header" "rules rules" "guide guide" "board log";
+        column-gap: 10px;
+    }
+    .game-header { grid-area: header; padding: 2px 8px; }
+    .rules { grid-area: rules; padding: 4px 12px; }
+    .combat-guide { grid-area: guide; padding: 4px 10px; }
+    #game-board { grid-area: board; margin-bottom: 0; }
+    #game-log { grid-area: log; height: auto; max-height: calc(100vh - 110px); position: sticky; top: 8px; align-self: start; }
+    .battlefield { margin-bottom: 2px; }
+    .card { height: 76px !important; }
+    .card-image { height: 30px; }
+}
+
+@media (max-width: 768px) {
+    .field-slot { height: auto; min-height: 84px; }
+    .monster { padding: 5px; gap: 4px; }
+    .monster-image { width: 34px; height: 34px; }
+    .monster-label { font-size: 11px; line-height: 14px; }
+    .monster-stats { font-size: 12px; }
+    .monster-actions button { padding: 3px 6px; font-size: 11px; }
+    .player-stats { flex-wrap: wrap; gap: 4px; font-size: 10px; }
+    .player-stats span { padding: 3px 5px; }
+}
+@media (min-width: 900px) {
+    #turn-controls { height: 32px; }
+    .card { height: 72px !important; }
+    .card-image { height: 28px; }
+    .player-area { gap: 3px; }
+}
+
+/* v1.7：召喚直後の守り */
+.monster.guarded { box-shadow: 0 0 0 2px #90cdf4, 0 2px 4px rgba(0, 0, 0, 0.18); }
+.guard-badge { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 999px; background: #bee3f8; color: #2a4365; font-size: 10px; font-weight: bold; line-height: 15px; }

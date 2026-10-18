@@ -1,0 +1,20 @@
+{
+  "version": "v1.7",
+  "matches": 200,
+  "turns": 4628,
+  "firstWins": 105,
+  "fatigueFinishes": 29,
+  "attacks": 8036,
+  "summons": 5289,
+  "moves": 185,
+  "swaps": 544,
+  "starts": 4599,
+  "choicesStart": 30972,
+  "firstActions": 4513,
+  "choicesAfterFirst": 23169,
+  "meanTurns": 23.14,
+  "firstWinPct": 52.5,
+  "fatiguePct": 14.5,
+  "meanChoicesStart": 6.734507501630789,
+  "meanChoicesAfterFirst": 5.133835586084644
+}

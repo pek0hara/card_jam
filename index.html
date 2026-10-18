@@ -3,20 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>カードゲーム</title>
-    <link rel="stylesheet" href="style.css?v=23">
+    <title>カードジャム</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="style.css?v=27">
 </head>
 <body>
     <div id="game-container">
+        <header class="game-header"><strong>カードジャム</strong><span id="turn-status" aria-live="polite"></span><button id="restart-btn">新しい対戦</button></header>
+        <details class="rules"><summary>遊び方・共通コスト</summary><p>ライフ20を削り切れば勝利。共通コストは毎ターン全回復し、先攻は2→3→4、後攻は3→4（先攻も最初の手番にドロー）。持ち越しや被ダメージによる獲得はありません。</p><p>手札→空きマスで召喚（キーボードはTab・Enter、Escで選択解除）：カード右上のコストを消費。移動ボタンで同じ段の左右の空きマスへ移動：コスト1、1体につき毎ターン1回。後列モンスターの「前へ交代」ボタンで前後交代：コスト1、列ごとに毎ターン1回。</p><p>前列モンスターの「攻撃」ボタンで正面へ攻撃（ボタンに結果の予告を表示）：無料、1体につき毎ターン1回。敵がいなければ直接攻撃。双方の初回ターンは攻撃不可。召喚ターンは敵モンスターにのみ攻撃可。移動・交代しても攻撃済みと召喚直後の制限は維持。</p><p>召喚したモンスターは、直後の相手の手番の間「守り-1」で受けるダメージが1減る（直接攻撃には影響なし）。敵が生き残ると反撃。前列が空くと後列が自動前進。コスト0でも攻撃可能。コスト0かつ攻撃が残っていなければ自動終了。</p><p>初手3枚にコスト2以下を1枚保証。手札は4枚まで。満杯ならドロー見送り。山札切れはドローのたびに疲労1、2、3…ダメージ。</p></details>
+        <p class="combat-guide">手札を選んで空きマスへ召喚。モンスターの「攻撃」「前へ交代」「左右移動」ボタンで行動（攻撃は無料、交代・移動はコスト1）。</p>
         <div id="game-board">
             <!-- プレイヤー2エリア（上側） -->
             <div class="player-area" id="player2-area">
                 <div class="player-info">
-                    <span class="player-name">プレイヤー2</span>
+                    <span class="player-name">AI</span>
                     <div class="player-stats">
                         <span class="life">ライフ: <span id="player2-life">20</span></span>
-                        <span class="gems">ジェム: <span id="player2-gems">0</span></span>
-                        <span class="action">行動力: <span id="player2-action">0</span></span>
+                        <span class="energy">コスト: <span id="player2-energy">0/0</span></span>
+                        <span class="deck">山札: <span id="player2-deck">16</span></span>
+                        <span class="handcount">手札: <span id="player2-handcount">0/4</span></span>
                     </div>
                 </div>
                 <div class="hand" id="player2-hand">
@@ -47,11 +52,12 @@
                     <!-- プレイヤー1の手札 -->
                 </div>
                 <div class="player-info">
-                    <span class="player-name">プレイヤー1</span>
+                    <span class="player-name">あなた</span>
                     <div class="player-stats">
                         <span class="life">ライフ: <span id="player1-life">20</span></span>
-                        <span class="gems">ジェム: <span id="player1-gems">0</span></span>
-                        <span class="action">行動力: <span id="player1-action">1</span></span>
+                        <span class="energy">コスト: <span id="player1-energy">0/0</span></span>
+                        <span class="deck">山札: <span id="player1-deck">16</span></span>
+                        <span class="handcount">手札: <span id="player1-handcount">0/4</span></span>
                     </div>
                 </div>
             </div>
@@ -62,6 +68,6 @@
         </div>
     </div>
 
-    <script src="game.js?v=11"></script>
+    <script src="game.js?v=16"></script>
 </body>
 </html>

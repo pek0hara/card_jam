@@ -6,6 +6,9 @@ const POSITION = {
     BACK_RIGHT: 3
 };
 
+// 召喚されたモンスターは、直後の相手手番の間だけ受けるダメージをこの値だけ減らす（0で無効）
+const RULES = { summonGuard: 1 };
+
 const ROW = {
     FRONT: 0,
     BACK: 1
@@ -25,10 +28,10 @@ const CARD_IMAGE_MAP = {
 class CardGame {
     constructor() {
         const firstPlayer = Math.random() < 0.5 ? 1 : 2;
-        console.log(`先攻プレイヤーを決定: プレイヤー${firstPlayer}`);
 
         this.gameState = {
             currentPlayer: firstPlayer,
+            firstPlayer,
             turnNumber: 1,
             phase: 'main',
             gameOver: false,
@@ -38,22 +41,28 @@ class CardGame {
         this.players = {
             1: {
                 life: 20,
-                gems: 0,
-                actionPoints: 0,
+                energy: 0,
+                maxEnergy: 0,
+                turnsTaken: 0,
                 hand: [],
                 deck: [],
                 battlefield: [null, null, null, null],
                 firstTurnCompleted: false,
+                fatigue: 0,
+                swappedColumns: new Set(),
                 canAttackThisTurn: false
             },
             2: {
                 life: 20,
-                gems: 0,
-                actionPoints: 0,
+                energy: 0,
+                maxEnergy: 0,
+                turnsTaken: 0,
                 hand: [],
                 deck: [],
                 battlefield: [null, null, null, null],
                 firstTurnCompleted: false,
+                fatigue: 0,
+                swappedColumns: new Set(),
                 canAttackThisTurn: false
             }
         };
@@ -73,14 +82,12 @@ class CardGame {
     initializeGame() {
         this.createDecks();
         this.drawInitialHands();
-        this.log("カードジャム v1.2 - ゲーム開始！");
-        this.startTurn(this.gameState.currentPlayer, { skipDraw: true });
+        this.log("カードジャム v1.7 - ゲーム開始！");
+        // 先攻も最初の手番にドローする（後攻は最初の手番のコストが3）
+        this.startTurn(this.gameState.currentPlayer);
 
-        // コンピュータプレイヤーが先攻の場合は自動でプレイ
-        if (this.computerPlayers.has(this.gameState.currentPlayer)) {
-            this.log(`プレイヤー${this.gameState.currentPlayer}はコンピュータプレイヤーです。自動でプレイします。`);
-            this.scheduleComputerTurn(1500);
-        }
+        // AIが先攻の場合は少し待ってから自動でプレイ
+        if (this.isComputerTurn()) this.scheduleComputerTurn(1500);
     }
 
     createDecks() {
@@ -96,8 +103,8 @@ class CardGame {
         ];
 
         for (let player = 1; player <= 2; player++) {
-            for (let i = 0; i < 15; i++) {
-                const template = cardTemplates[Math.floor(Math.random() * cardTemplates.length)];
+            for (let i = 0; i < cardTemplates.length * 2; i++) {
+                const template = cardTemplates[i % cardTemplates.length];
                 const card = {
                     id: `${player}-${i}`,
                     ...template,
@@ -122,43 +129,43 @@ class CardGame {
             for (let i = 0; i < 3; i++) {
                 this.drawCard(player);
             }
+            // 初手に召喚できるカードを1枚保証する（デッキ構成は変えない）。
+            if (!this.players[player].hand.some(card => card.cost <= 2)) {
+                const index = this.players[player].deck.findIndex(card => card.cost <= 2);
+                if (index >= 0) {
+                    [this.players[player].hand[0], this.players[player].deck[index]] =
+                        [this.players[player].deck[index], this.players[player].hand[0]];
+                }
+            }
         }
     }
 
     drawCard(player) {
         if (this.players[player].deck.length === 0) {
-            this.log(`プレイヤー${player}は山札が切れています！ドローできません。`);
+            this.players[player].fatigue += 1;
+            this.players[player].life = Math.max(0, this.players[player].life - this.players[player].fatigue);
+            this.log(`${this.playerName(player)}は山札切れ！疲労で${this.players[player].fatigue}ダメージ。`);
+            this.checkWinCondition();
             return;
         }
 
-        // 手札が4枚の場合、一番左のカードを捨ててからドロー
+        // 手札が満杯なら、手札と山札を保持してドローを見送る
         if (this.players[player].hand.length >= 4) {
-            const discardedCard = this.players[player].hand.shift();
-            this.log(`プレイヤー${player}は${discardedCard.name}を捨てました。`);
+            this.log(`${this.playerName(player)}は手札が4枚のためドローを見送りました。`);
+            return;
         }
 
         const card = this.players[player].deck.pop();
         this.players[player].hand.push(card);
     }
 
-    discardExcessCards(player) {
-        while (this.players[player].hand.length > 4) {
-            const randomIndex = Math.floor(Math.random() * this.players[player].hand.length);
-            const discardedCard = this.players[player].hand.splice(randomIndex, 1)[0];
-            this.log(`プレイヤー${player}は${discardedCard.name}を捨てました。`);
-        }
-    }
-
     summonMonster(player, cardIndex, position) {
+        if (this.gameState.gameOver || player !== this.gameState.currentPlayer || !Number.isInteger(position) || position < 0 || position > 3) return false;
         const card = this.players[player].hand[cardIndex];
         
         if (!card) return false;
-        if (this.players[player].gems < card.cost) {
-            this.log("ジェムが不足しています！");
-            return false;
-        }
-        if (this.players[player].actionPoints < 1) {
-            this.log("行動力が不足しています！");
+        if (this.players[player].energy < card.cost) {
+            this.log("コストが不足しています！");
             return false;
         }
         if (this.players[player].battlefield[position] !== null) {
@@ -166,27 +173,30 @@ class CardGame {
             return false;
         }
 
-        this.players[player].gems -= card.cost;
-        this.players[player].actionPoints -= 1;
+        this.players[player].energy -= card.cost;
+        card.hasAttacked = false;
+        card.summonedTurn = this.gameState.turnNumber;
         this.players[player].battlefield[position] = card;
         this.players[player].hand.splice(cardIndex, 1);
 
-        this.log(`プレイヤー${player}が${card.name}を召喚しました！`);
+        this.log(`${this.playerName(player)}が${card.name}を召喚しました！`);
 
         // Move back-row monsters to front if front positions are empty (no log)
         this.moveBackRowToFront(player, false);
 
-        // Debug: Show final position
-        console.log(`Summoned ${card.name} at position ${position} for player ${player}`);
-        const actualRow = this.getActualRow(position, player);
-        const rowLabel = actualRow === ROW.FRONT ? 'FRONT' : 'BACK';
-        console.log(`Position ${position} is ${rowLabel} row`);
+
 
         return true;
     }
 
     attackWithMonster(attackerPlayer, attackerPosition, targetPlayer, targetPosition = null) {
+        if (this.gameState.gameOver || attackerPlayer !== this.gameState.currentPlayer || targetPlayer !== (attackerPlayer === 1 ? 2 : 1)) return false;
         const attacker = this.players[attackerPlayer].battlefield[attackerPosition];
+
+        if (attacker && (attacker.hasAttacked || this.getActualRow(attackerPosition, attackerPlayer) !== ROW.FRONT)) {
+            this.log("攻撃は前列のモンスター1体につき毎ターン1回です。");
+            return false;
+        }
 
         if (!attacker) {
             this.log("攻撃するモンスターがいません！");
@@ -198,21 +208,25 @@ class CardGame {
             return false;
         }
 
-        if (this.players[attackerPlayer].actionPoints < 1) {
-            this.log("行動力が不足しています！");
-            return false;
-        }
-
         // Check if the attack is valid (front-facing only)
         if (targetPosition !== null && !this.isValidAttackTarget(attackerPosition, targetPosition, attackerPlayer, targetPlayer)) {
             this.log("その位置には攻撃できません！正面の前列モンスターのみ攻撃可能です。");
             return false;
         }
 
-        this.players[attackerPlayer].actionPoints -= 1;
+        const expectedTarget = this.players[targetPlayer].battlefield[attackerPosition % 2] ? attackerPosition % 2 : null;
+        if (targetPosition !== expectedTarget) return false;
+
+        if (targetPosition === null && attacker.summonedTurn === this.gameState.turnNumber) {
+            this.log("召喚したターンは直接攻撃できません。敵モンスターには攻撃できます。");
+            return false;
+        }
+
+        attacker.hasAttacked = true;
 
         // Calculate damage (no position modifiers)
-        let damage = attacker.attack;
+        const guardTarget = targetPosition === null ? null : this.players[targetPlayer].battlefield[targetPosition];
+        let damage = guardTarget ? this.damageTo(attacker, guardTarget) : attacker.attack;
 
         if (targetPosition !== null) {
             const target = this.players[targetPlayer].battlefield[targetPosition];
@@ -222,27 +236,23 @@ class CardGame {
             }
 
             target.hp -= damage;
-            this.log(`${attacker.name}が${target.name}に${damage}ダメージ！`);
+            this.log(`${attacker.name}が${target.name}に${damage}ダメージ！${this.isGuarded(target) ? `（召喚直後の守りで-${Math.min(RULES.summonGuard, attacker.attack)}）` : ''}`);
 
             // Check for counter-attack: front row attacking front row
             const attackerRow = this.getActualRow(attackerPosition, attackerPlayer);
             const targetRow = this.getActualRow(targetPosition, targetPlayer);
 
             // Debug info
-            console.log(`Attack: Player${attackerPlayer} pos ${attackerPosition} (actual row ${attackerRow}) -> Player${targetPlayer} pos ${targetPosition} (actual row ${targetRow}), target HP: ${target.hp}`);
 
             if (attackerRow === ROW.FRONT && targetRow === ROW.FRONT && target.hp > 0) {
                 // Front-to-front attack: target counter-attacks with its ATK
                 const counterDamage = target.attack;
                 attacker.hp -= counterDamage;
                 this.log(`${target.name}が反撃！${attacker.name}に${counterDamage}ダメージ！`);
-                console.log(`Counter-attack: ${target.name} deals ${counterDamage} to ${attacker.name}`);
 
                 if (attacker.hp <= 0) {
                     this.players[attackerPlayer].battlefield[attackerPosition] = null;
                     this.log(`${attacker.name}は破壊されました！`);
-                    this.players[attackerPlayer].gems += 1;
-                    this.log(`プレイヤー${attackerPlayer}はジェムを1獲得しました。`);
 
                     // Move back-row monsters to front if front positions are empty
                     this.moveBackRowToFront(attackerPlayer);
@@ -252,20 +262,26 @@ class CardGame {
             if (target.hp <= 0) {
                 this.players[targetPlayer].battlefield[targetPosition] = null;
                 this.log(`${target.name}は破壊されました！`);
-                this.players[targetPlayer].gems += 1;
-                this.log(`プレイヤー${targetPlayer}はジェムを1獲得しました。`);
 
                 // Move back-row monsters to front if front positions are empty
                 this.moveBackRowToFront(targetPlayer);
             }
         } else {
-            this.players[targetPlayer].life -= damage;
-            this.players[targetPlayer].gems += 1;
-            this.log(`${attacker.name}がプレイヤー${targetPlayer}に${damage}ダメージ！ジェムを1獲得。`);
+            this.players[targetPlayer].life = Math.max(0, this.players[targetPlayer].life - damage);
+            this.log(`${attacker.name}が${this.playerName(targetPlayer)}に${damage}ダメージ！`);
         }
 
         this.checkWinCondition();
         return true;
+    }
+
+    // 直前の相手手番に召喚されたモンスターは守られている
+    isGuarded(monster) {
+        return RULES.summonGuard > 0 && !!monster && monster.summonedTurn === this.gameState.turnNumber - 1;
+    }
+
+    damageTo(attacker, target) {
+        return Math.max(0, attacker.attack - (this.isGuarded(target) ? RULES.summonGuard : 0));
     }
 
     // Get actual row for position considering player 2's visual layout
@@ -297,27 +313,6 @@ class CardGame {
         const targetRow = this.getActualRow(targetPosition, targetPlayer);
 
         return attackerColumn === targetColumn && targetRow === ROW.FRONT;
-    }
-
-    // Calculate damage with position-based modifiers
-    calculateDamageWithPositionModifier(attackerPosition, targetPosition, baseDamage, attackerPlayer, targetPlayer) {
-        const attackerRow = this.getActualRow(attackerPosition, attackerPlayer);
-        const targetRow = this.getActualRow(targetPosition, targetPlayer);
-
-        let damage = baseDamage;
-
-        if (attackerRow === ROW.FRONT && targetRow === ROW.BACK) {
-            // Front row attacking back row: -1 damage
-            damage -= 1;
-        } else if (attackerRow === ROW.BACK && targetRow === ROW.FRONT) {
-            // Back row attacking front row: -1 damage
-            damage -= 1;
-        } else if (attackerRow === ROW.BACK && targetRow === ROW.BACK) {
-            // Back row attacking back row: -2 damage
-            damage -= 2;
-        }
-
-        return Math.max(0, damage); // Minimum 0 damage
     }
 
     // Move back-row monsters to front-row if front positions are empty
@@ -362,21 +357,18 @@ class CardGame {
             }
         }
 
-        // First turn: 2 gems, subsequent turns: 1 gem
-        if (isFirstTurnForPlayer) {
-            playerData.gems += 2;
-        } else {
-            playerData.gems += 1;
-        }
-        playerData.actionPoints = 2;
+        playerData.turnsTaken += 1;
+        // 先攻・後攻の差を縮めるため、後攻はコストが1手番早く伸びる（先攻2→3→4、後攻3→4）
+        const isSecondPlayer = this.gameState.firstPlayer !== undefined && player !== this.gameState.firstPlayer;
+        playerData.maxEnergy = Math.min(4, playerData.turnsTaken + (isSecondPlayer ? 2 : 1));
+        playerData.energy = playerData.maxEnergy;
+        playerData.battlefield.forEach(monster => { if (monster) monster.hasAttacked = false; });
+        playerData.swappedColumns.clear();
         playerData.canAttackThisTurn = !isFirstTurnForPlayer;
 
         this.selectedCard = null;
 
-        this.log(`プレイヤー${player}のターンです。`);
-        if (skipDraw) {
-            this.log("先攻プレイヤーの最初のターンはドローを行いません。");
-        }
+        this.log(`${this.playerName(player)}のターンです。`);
         if (!playerData.canAttackThisTurn) {
             this.log("このターンは攻撃できません。");
         }
@@ -422,47 +414,74 @@ class CardGame {
                     clearTimeout(this.autoEndTurnTimeout);
                     this.autoEndTurnTimeout = null;
                 }
-                this.log(`プレイヤー${winner}の勝利！`);
-                alert(`プレイヤー${winner}の勝利！`);
+                this.log(`${this.playerName(winner)}の勝利！`);
+                this.selectedCard = null;
+                this.updateUI();
                 return;
             }
         }
     }
 
+    playerName(player) {
+        return this.isComputerPlayer(player) ? 'AI' : 'あなた';
+    }
+
     updateUI() {
+        if (this.isSimulation || typeof document === 'undefined') return;
+        // 再描画で要素が作り直されるので、キーボードのフォーカスを引き継ぐ
+        const focusKey = document.activeElement?.dataset?.focusKey;
+
         for (let player = 1; player <= 2; player++) {
+            const data = this.players[player];
             const playerArea = document.getElementById(`player${player}-area`);
             playerArea.classList.toggle('active-turn', player === this.gameState.currentPlayer);
 
-            const lifeElement = document.getElementById(`player${player}-life`);
-            const gemsElement = document.getElementById(`player${player}-gems`);
-            const actionElement = document.getElementById(`player${player}-action`);
-
-            const actionPoints = this.players[player].actionPoints;
-            let actionDisplay = '';
-            if (actionPoints === 2) {
-                actionDisplay = '⚫︎⚫︎';
-            } else if (actionPoints === 1) {
-                actionDisplay = '⚫︎⚪︎';
-            } else {
-                actionDisplay = '⚪︎⚪︎';
+            this.updateStatWithAnimation(player, 'life', data.life, document.getElementById(`player${player}-life`));
+            this.updateStatWithAnimation(player, 'energy', `${data.energy}/${data.maxEnergy}`, document.getElementById(`player${player}-energy`));
+            const deckElement = document.getElementById(`player${player}-deck`);
+            if (deckElement) {
+                deckElement.textContent = data.deck.length > 0 ? `${data.deck.length}` : `0（次の疲労${data.fatigue + 1}）`;
+                deckElement.parentElement.classList.toggle('warning', data.deck.length === 0);
+                deckElement.parentElement.title = data.deck.length > 0
+                    ? `山札残り${data.deck.length}枚。0枚でドローすると疲労ダメージ。`
+                    : `次のドローで疲労${data.fatigue + 1}ダメージ`;
             }
-
-            this.updateStatWithAnimation(player, 'life', this.players[player].life, lifeElement);
-            this.updateStatWithAnimation(player, 'gems', this.players[player].gems, gemsElement);
-            this.updateStatWithAnimation(player, 'action', actionDisplay, actionElement);
+            const handCount = document.getElementById(`player${player}-handcount`);
+            if (handCount) {
+                handCount.textContent = `${data.hand.length}/4`;
+                handCount.parentElement.title = data.hand.length >= 4 ? '手札満杯：次のドローは見送り（山札0なら疲労は受ける）' : '手札は4枚まで';
+            }
 
             this.renderHand(player);
             this.renderBattlefield(player);
         }
 
+        const status = document.getElementById('turn-status');
+        if (this.gameState.gameOver) {
+            status.textContent = `対戦終了 · ${this.playerName(this.gameState.winner)}の勝利`;
+        } else {
+            status.textContent = `ターン${this.gameState.turnNumber} · ${this.isComputerTurn() ? 'AIの手番' : 'あなたの手番'}${!this.players[this.gameState.currentPlayer].canAttackThisTurn ? '（初回は攻撃不可）' : ''}`;
+            if (!this.isComputerTurn() && this.players[1].energy === 0) {
+                const remainingAttacks = [0, 1].filter(position => this.canMonsterAttack(1, position)).length;
+                if (remainingAttacks > 0) status.textContent += ` · コスト0でも攻撃可能（${remainingAttacks}体）`;
+            }
+        }
         const endTurnBtn = document.getElementById('end-turn-btn');
-        if (this.isComputerTurn()) {
+        if (this.gameState.gameOver) {
+            endTurnBtn.disabled = true;
+            endTurnBtn.textContent = this.gameState.winner === 1 ? 'あなたの勝利！' : 'AIの勝利';
+        } else if (this.isComputerTurn()) {
             endTurnBtn.disabled = true;
             endTurnBtn.textContent = 'AI思考中...';
         } else {
             endTurnBtn.disabled = false;
             endTurnBtn.textContent = 'ターン終了';
+        }
+
+        if (focusKey) {
+            const target = document.querySelector(`[data-focus-key="${focusKey}"]`) ||
+                (!endTurnBtn.disabled ? endTurnBtn : null);
+            if (target && !target.disabled) target.focus();
         }
     }
 
@@ -477,8 +496,8 @@ class CardGame {
             // Force reflow so repeated animation reliably triggers.
             void element.offsetWidth;
 
-            const prevNum = Number(previousValue);
-            const nextNum = Number(value);
+            const prevNum = Number(String(previousValue).split('/')[0]);
+            const nextNum = Number(String(value).split('/')[0]);
             const isNumericChange = !Number.isNaN(prevNum) && !Number.isNaN(nextNum);
             const animationClass = isNumericChange && nextNum < prevNum
                 ? 'stat-bump-down'
@@ -493,18 +512,33 @@ class CardGame {
         this.previousPlayerStats[player][statKey] = value;
     }
 
+    // Enter/Spaceでもクリックと同じ操作をする
+    makeActivatable(element, label, onActivate) {
+        element.tabIndex = 0;
+        element.setAttribute('role', 'button');
+        element.setAttribute('aria-label', label);
+        element.addEventListener('click', onActivate);
+        element.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onActivate();
+            }
+        });
+    }
+
     renderHand(player) {
         const handElement = document.getElementById(`player${player}-hand`);
         handElement.innerHTML = '';
-
-        console.log(`renderHand for player ${player}, selectedCard: ${this.selectedCard}, currentPlayer: ${this.gameState.currentPlayer}`);
+        const interactive = player === this.gameState.currentPlayer && !this.isComputerPlayer(player) && !this.gameState.gameOver;
 
         this.players[player].hand.forEach((card, index) => {
             const cardElement = document.createElement('div');
             cardElement.className = 'card';
+            cardElement.title = `${card.name}：召喚コスト${card.cost}`;
+            const unaffordable = player === 1 && card.cost > this.players[player].energy;
+            if (unaffordable) cardElement.classList.add('unaffordable');
 
-            // 選択されたカードにselectedクラスを追加
-            if (player === this.gameState.currentPlayer && this.selectedCard === index) {
+            if (interactive && this.selectedCard === index) {
                 cardElement.classList.add('selected');
             }
 
@@ -513,51 +547,148 @@ class CardGame {
                     <span class="card-name-text">${card.name}</span>
                     <span class="card-cost">${card.cost}</span>
                 </div>
-                <img class="card-image" src="${this.getCardImagePath(card.name)}" alt="${card.name}">
+                <img class="card-image" src="${this.getCardImagePath(card.name)}" alt="">
                 <div class="card-stats">
                     <span class="stat-pill hp-stat"><img class="stat-icon" src="img/heart.svg" alt="体力"><span class="stat-value">${card.hp}</span></span>
                     <span class="stat-pill attack-stat"><img class="stat-icon" src="img/sword.svg" alt="攻撃"><span class="stat-value">${card.attack}</span></span>
                 </div>
             `;
 
-            if (player === this.gameState.currentPlayer && !this.isComputerPlayer(player)) {
-                cardElement.addEventListener('click', () => this.selectCard(index));
-                cardElement.style.cursor = 'pointer';
+            if (interactive) {
+                cardElement.dataset.focusKey = `hand-${card.id}`;
+                this.makeActivatable(cardElement,
+                    `${card.name}（コスト${card.cost}、体力${card.hp}、攻撃${card.attack}）${unaffordable ? '、コスト不足' : ''}を選択`,
+                    () => this.selectCard(index));
+                cardElement.setAttribute('aria-pressed', String(this.selectedCard === index));
             }
 
             handElement.appendChild(cardElement);
         });
     }
 
+    // 攻撃した場合の結果を実行前に示す
+    previewAttack(player, position) {
+        const monster = this.players[player].battlefield[position];
+        const opponent = player === 1 ? 2 : 1;
+        const target = this.players[opponent].battlefield[position % 2];
+        if (!target) {
+            return { short: `本体に${monster.attack}`, detail: `${this.playerName(opponent)}に${monster.attack}ダメージ` };
+        }
+        const damage = this.damageTo(monster, target);
+        const kills = damage >= target.hp;
+        const counter = kills ? 0 : target.attack;
+        const dies = !kills && counter >= monster.hp;
+        const short = kills ? `${target.name}撃破` : dies ? `${damage}・反撃で倒れる` : `${damage}・反撃${counter}`;
+        const guardNote = this.isGuarded(target) ? `召喚直後の守りで-${RULES.summonGuard}。` : '';
+        const detail = guardNote + (kills
+            ? `${target.name}に${damage}ダメージで撃破（反撃なし）`
+            : `${target.name}に${damage}ダメージ（残り体力${target.hp - damage}）。反撃${counter}${dies ? 'で倒れます' : ''}`);
+        return { short, detail, dies };
+    }
+
+    monsterStatus(player, position) {
+        const monster = this.players[player].battlefield[position];
+        if (this.gameState.gameOver || player !== this.gameState.currentPlayer) return '';
+        const justSummoned = monster.summonedTurn === this.gameState.turnNumber;
+        if (monster.hasAttacked) return '攻撃済み';
+        if (!this.players[player].canAttackThisTurn) return '初回は攻撃不可';
+        if (position < 2) return justSummoned && !this.canMonsterAttack(player, position) ? '召喚直後：直接攻撃不可' : '';
+        return justSummoned ? '後列・召喚直後' : '後列・攻撃可';
+    }
+
+    createActionButton(label, ariaLabel, focusKey, { disabled = false, title = '', kind = '' } = {}, onClick) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.setAttribute('aria-label', ariaLabel);
+        button.dataset.focusKey = focusKey;
+        if (kind) button.classList.add(...kind.split(" "));
+        if (title) button.title = title;
+        button.disabled = disabled;
+        button.addEventListener('click', event => {
+            event.stopPropagation();
+            onClick();
+        });
+        return button;
+    }
+
     renderBattlefield(player) {
         const battlefieldElement = document.getElementById(`player${player}-battlefield`);
         const slots = battlefieldElement.querySelectorAll('.field-slot');
-        
+        const interactive = player === this.gameState.currentPlayer && !this.isComputerPlayer(player) && !this.gameState.gameOver;
+        const data = this.players[player];
+
         slots.forEach((slot, position) => {
-            slot.innerHTML = '';
-            const monster = this.players[player].battlefield[position];
-            
+            const fresh = slot.cloneNode(false); // 古いイベントを残さない
+            slot.replaceWith(fresh);
+            slot = fresh;
+            slot.classList.remove('empty-slot');
+            slot.removeAttribute('role');
+            slot.removeAttribute('tabindex');
+            slot.removeAttribute('aria-label');
+            delete slot.dataset.focusKey;
+            const slotName = `${position < 2 ? '前列' : '後列'}${position % 2 === 0 ? '左' : '右'}`;
+            slot.dataset.label = slotName;
+            const monster = data.battlefield[position];
+
             if (monster) {
                 const monsterElement = document.createElement('div');
                 monsterElement.className = 'monster';
+                const status = this.monsterStatus(player, position);
+                if (monster.hasAttacked) monsterElement.classList.add('exhausted');
+                const guarded = !this.gameState.gameOver && this.isGuarded(monster);
+                if (guarded) monsterElement.classList.add('guarded');
+                monsterElement.title = `${monster.name}（${slotName}）${status ? '：' + status : ''}`;
                 monsterElement.innerHTML = `
-                    <img class="monster-image" src="${this.getCardImagePath(monster.name)}" alt="${monster.name}">
-                    <div class="monster-stats">
-                        <span class="stat-pill hp-stat"><img class="stat-icon" src="img/heart.svg" alt="体力"><span>${monster.hp}/${monster.maxHp}</span></span>
-                        <span class="stat-pill attack-stat"><img class="stat-icon" src="img/sword.svg" alt="攻撃"><span>${monster.attack}</span></span>
+                    <img class="monster-image" src="${this.getCardImagePath(monster.name)}" alt="">
+                    <div class="monster-info">
+                        <span class="monster-label">${monster.name}${guarded ? `<span class="guard-badge" title="召喚直後：この手番の間、受けるダメージ-${RULES.summonGuard}">守り-${RULES.summonGuard}</span>` : ''}${status ? `<small> · ${status}</small>` : ''}</span>
+                        <div class="monster-stats">
+                            <span class="stat-pill hp-stat"><img class="stat-icon" src="img/heart.svg" alt="体力"><span>${monster.hp}/${monster.maxHp}</span></span>
+                            <span class="stat-pill attack-stat"><img class="stat-icon" src="img/sword.svg" alt="攻撃"><span>${monster.attack}</span></span>
+                        </div>
                     </div>
                 `;
-                
-                if (player === this.gameState.currentPlayer && !this.isComputerPlayer(player)) {
-                    monsterElement.addEventListener('click', () => this.selectMonster(player, position));
-                    monsterElement.style.cursor = 'pointer';
-                }
 
+                if (interactive) {
+                    const controls = document.createElement('div');
+                    controls.className = 'monster-actions';
+                    if (position < 2) {
+                        if (this.canMonsterAttack(player, position)) {
+                            const preview = this.previewAttack(player, position);
+                            controls.appendChild(this.createActionButton(
+                                `攻撃：${preview.short}`, `${monster.name}で攻撃：${preview.detail}`, `attack-${monster.id}`,
+                                { title: preview.detail, kind: preview.dies ? 'attack danger' : 'attack' },
+                                () => this.runPlayerAction(() => this.attackFrontMonster(player, position))));
+                        }
+                    } else {
+                        const swapped = data.swappedColumns.has(position % 2);
+                        const front = data.battlefield[position % 2];
+                        controls.appendChild(this.createActionButton(
+                            swapped ? '交代済み' : '前へ交代 · 1',
+                            `${monster.name}を前列${front ? `の${front.name}と交代` : 'へ移動'}（コスト1）`,
+                            `swap-${monster.id}`,
+                            { disabled: swapped || data.energy < 1, title: swapped ? 'この列は今ターン交代済み' : data.energy < 1 ? 'コスト不足' : '' },
+                            () => this.runPlayerAction(() => this.swapBackToFront(player, position))));
+                    }
+                    if (!data.battlefield[position ^ 1]) {
+                        const moved = monster.movedTurn === this.gameState.turnNumber;
+                        const direction = position % 2 === 0 ? '右' : '左';
+                        controls.appendChild(this.createActionButton(
+                            moved ? '移動済み' : `${direction}へ · 1`,
+                            `${monster.name}を${direction}へ移動（コスト1）`,
+                            `move-${monster.id}`,
+                            { disabled: !this.canMoveSideways(player, position), title: moved ? 'このモンスターは今ターン移動済み' : data.energy < 1 ? 'コスト不足' : '' },
+                            () => this.runPlayerAction(() => this.moveSideways(player, position))));
+                    }
+                    if (controls.childElementCount > 0) monsterElement.querySelector('.monster-info').appendChild(controls);
+                }
                 slot.appendChild(monsterElement);
-            } else if (this.selectedCard !== null && player === this.gameState.currentPlayer && !this.isComputerPlayer(player)) {
-                slot.addEventListener('click', () => this.placeMonster(position));
-                slot.style.cursor = 'pointer';
+            } else if (interactive && this.selectedCard !== null) {
                 slot.classList.add('empty-slot');
+                slot.dataset.focusKey = `slot-${position}`;
+                const card = data.hand[this.selectedCard];
+                this.makeActivatable(slot, `${card ? card.name : ''}を${slotName}に召喚`, () => this.placeMonster(position));
             }
         });
     }
@@ -567,124 +698,131 @@ class CardGame {
     }
 
     selectCard(cardIndex) {
-        if (this.isComputerTurn()) return;
+        if (this.gameState.gameOver || this.isComputerTurn()) return;
 
         // 同じカードを再選択した場合は選択解除
         if (this.selectedCard === cardIndex) {
             this.selectedCard = null;
-            this.log(`選択を解除しました。`);
         } else {
             this.selectedCard = cardIndex;
-            this.log(`${this.players[this.gameState.currentPlayer].hand[cardIndex].name}を選択しました。`);
         }
-
-        this.selectedMonster = null;
-        this.attackMode = false;
         this.updateUI();
     }
 
-    selectMonster(player, position) {
-        if (player !== this.gameState.currentPlayer) return;
-        if (this.isComputerPlayer(player)) return;
-
-        const monster = this.players[player].battlefield[position];
-        if (!monster) return;
-
-        const actualRow = this.getActualRow(position, player);
-
-        if (actualRow === ROW.FRONT) {
-            // Front row monster: direct attack
-            this.attackFrontMonster(player, position);
-        } else {
-            // Back row monster: swap with front row (only if action points > 0)
-            if (this.players[player].actionPoints <= 0) {
-                this.log("行動力が0のため、入れ替えできません！");
-                return;
-            }
-            this.swapBackToFront(player, position);
-        }
-
+    // ボタンからの攻撃・交代・移動を実行して画面を更新する
+    runPlayerAction(action) {
+        if (this.gameState.gameOver || this.isComputerTurn()) return;
+        const result = action();
         this.selectedCard = null;
         this.updateUI();
-
-        // Check if action points are 0 and auto-end turn
-        this.checkAutoEndTurn();
+        if (result !== false) this.checkAutoEndTurn();
     }
 
-    // Front row monster attacks directly ahead (front row only)
+    // 前列モンスターが正面へ攻撃する（敵前列がいなければ相手本体）
     attackFrontMonster(player, position) {
         if (!this.players[player].canAttackThisTurn) {
             this.log("このターンは攻撃できません！");
-            return;
+            return false;
         }
-
         const opponent = player === 1 ? 2 : 1;
-        const column = position % 2; // 0 for left, 1 for right
-
-        // Only target front row monsters, not back row
-        const frontTarget = this.players[opponent].battlefield[column]; // same column front
-
-        if (frontTarget) {
-            // Attack front row monster
-            this.attackWithMonster(player, position, opponent, column);
-        } else {
-            // Attack player directly (back row monsters are protected)
-            this.attackWithMonster(player, position, opponent, null);
-        }
+        const column = position % 2;
+        return this.attackWithMonster(player, position, opponent, this.players[opponent].battlefield[column] ? column : null);
     }
 
-    // Swap back row monster with front row (no action cost)
+    // 前後交代は共通コスト1。
     swapBackToFront(player, position) {
+        if (this.gameState.gameOver || player !== this.gameState.currentPlayer || position < 2 || position > 3 || this.players[player].energy < 1) return false;
         const column = position % 2; // 0 for left, 1 for right
+        if (this.players[player].swappedColumns.has(column)) return false;
         const frontPosition = column; // front position in same column
         const backPosition = position;
 
         const backMonster = this.players[player].battlefield[backPosition];
         const frontMonster = this.players[player].battlefield[frontPosition];
 
-        if (!backMonster) return;
+        if (!backMonster) return false;
 
-        // Swap positions (no action cost)
+        this.players[player].energy -= 1;
+        this.players[player].swappedColumns.add(column);
+        // 攻撃済み・召喚直後の状態はそのまま維持する。
         this.players[player].battlefield[frontPosition] = backMonster;
         this.players[player].battlefield[backPosition] = frontMonster;
 
         if (frontMonster) {
-            this.log(`${backMonster.name}と${frontMonster.name}が位置を交代しました！`);
+            this.log(`${backMonster.name}と${frontMonster.name}が位置を交代しました（コスト1）！`);
         } else {
             this.log(`${backMonster.name}が前列に移動しました！`);
         }
+        return true;
+    }
+
+    canMoveSideways(player, position) {
+        if (this.gameState.gameOver || player !== this.gameState.currentPlayer || !Number.isInteger(position) || position < 0 || position > 3) return false;
+        const data = this.players[player];
+        const monster = data.battlefield[position];
+        return data.energy >= 1 && !!monster && !data.battlefield[position ^ 1] && monster.movedTurn !== this.gameState.turnNumber;
+    }
+
+    moveSideways(player, position) {
+        if (!this.canMoveSideways(player, position)) return false;
+        const data = this.players[player];
+        const monster = data.battlefield[position];
+        data.energy -= 1;
+        data.battlefield[position ^ 1] = monster;
+        data.battlefield[position] = null;
+        monster.movedTurn = this.gameState.turnNumber;
+        this.log(`${monster.name}が${position % 2 === 0 ? '右' : '左'}列へ移動しました（コスト1）。`);
+        this.moveBackRowToFront(player);
+        return true;
+    }
+
+    computerMove(player) {
+        const opponent = player === 1 ? 2 : 1;
+        for (const position of [0, 1]) {
+            const monster = this.players[player].battlefield[position];
+            if (!monster || monster.hasAttacked || !this.players[player].canAttackThisTurn || monster.summonedTurn === this.gameState.turnNumber) continue;
+            if (this.canMoveSideways(player, position) && this.players[opponent].battlefield[position] && !this.players[opponent].battlefield[position ^ 1]) {
+                if (this.moveSideways(player, position)) { this.updateUI(); return true; }
+            }
+        }
+        return false;
     }
 
     placeMonster(position) {
         if (this.selectedCard === null) return;
-        if (this.isComputerTurn()) return;
+        if (this.gameState.gameOver || this.isComputerTurn()) return;
 
         if (this.summonMonster(this.gameState.currentPlayer, this.selectedCard, position)) {
             this.selectedCard = null;
             this.updateUI();
 
-            // Check if action points are 0 and auto-end turn
+            // Check if shared cost are 0 and auto-end turn
             this.checkAutoEndTurn();
         }
     }
 
-    // Check if action points are 0 and automatically end turn
+    canMonsterAttack(player, position) {
+        if (this.gameState.gameOver || player !== this.gameState.currentPlayer || position < 0 || position > 1) return false;
+        const monster = this.players[player].battlefield[position];
+        if (!monster || monster.hasAttacked || !this.players[player].canAttackThisTurn) return false;
+        return monster.summonedTurn !== this.gameState.turnNumber || !!this.players[player === 1 ? 2 : 1].battlefield[position];
+    }
+
+    // コストを使い切っても、無料攻撃が残っている間は手番を維持する。
     checkAutoEndTurn() {
-        if (this.isComputerTurn()) return; // Don't auto-end computer turns
-        if (this.gameState.gameOver) return;
-
+        if (this.gameState.gameOver || this.isComputerTurn()) return; // Don't auto-end computer turns
+        if (this.autoEndTurnTimeout) {
+            clearTimeout(this.autoEndTurnTimeout);
+            this.autoEndTurnTimeout = null;
+        }
         const currentPlayer = this.gameState.currentPlayer;
-        if (this.players[currentPlayer].actionPoints <= 0) {
-            this.log("行動力が0になりました。自動的にターンを終了します。");
-
-            // Clear any existing auto-end timeout
-            if (this.autoEndTurnTimeout) {
-                clearTimeout(this.autoEndTurnTimeout);
-            }
-
+        if (this.players[currentPlayer].energy <= 0 && ![0, 1].some(position => this.canMonsterAttack(currentPlayer, position))) {
+            this.log("コストが0で、攻撃も残っていないためターンを終了します。");
             this.autoEndTurnTimeout = setTimeout(() => {
                 this.autoEndTurnTimeout = null;
-                if (!this.gameState.gameOver && this.gameState.currentPlayer === currentPlayer) {
+                if (!this.gameState.gameOver && this.gameState.currentPlayer === currentPlayer &&
+                    this.players[currentPlayer].energy <= 0 &&
+                    ![0, 1].some(position => this.canMonsterAttack(currentPlayer, position))) {
                     this.endTurn();
                 }
             }, 1000); // 1秒待ってからターン終了
@@ -705,40 +843,9 @@ class CardGame {
         if (!this.isComputerTurn() || this.gameState.gameOver) return;
 
         const player = this.gameState.currentPlayer;
-        const opponent = player === 1 ? 2 : 1;
-
         await this.delay(600);
-
-        let performedAction = true;
-        while (!this.gameState.gameOver && this.players[player].actionPoints > 0 && performedAction) {
-            performedAction = false;
-
-            if (this.computerAttack(player, opponent, true)) {
-                performedAction = true;
-                await this.delay(600);
-                continue;
-            }
-
-            const hasAttackers = this.players[player].battlefield.some(monster => monster !== null);
-            const canSpareActionPointForSummon = this.players[player].actionPoints > 1 || !hasAttackers;
-
-            if (canSpareActionPointForSummon && this.computerSummon(player)) {
-                performedAction = true;
-                await this.delay(600);
-                continue;
-            }
-
-            // Try swapping back row monsters to front for better positioning
-            if (this.computerSwap(player)) {
-                performedAction = true;
-                await this.delay(600);
-                continue;
-            }
-
-            if (this.computerAttack(player, opponent)) {
-                performedAction = true;
-                await this.delay(600);
-            }
+        while (!this.gameState.gameOver && this.gameState.currentPlayer === player && this.performComputerAction(player)) {
+            await this.delay(600);
         }
 
         if (!this.gameState.gameOver) {
@@ -747,10 +854,96 @@ class CardGame {
         }
     }
 
+    performComputerAction(player) {
+        if (this.gameState.gameOver || player !== this.gameState.currentPlayer) return false;
+        const opponent = player === 1 ? 2 : 1;
+
+        // 攻撃・交代・移動を組み合わせて、この手番で勝てる手順があれば最優先で実行する
+        const lethalPlan = this.findLethalPlan(player);
+        if (lethalPlan && lethalPlan.length > 0) {
+            const success = this.applyTacticalAction(player, lethalPlan[0]);
+            if (success) {
+                this.updateUI();
+                return true;
+            }
+        }
+
+        return this.computerMove(player) || this.computerAttack(player, opponent) || this.computerSwap(player) ||
+            this.computerSummon(player);
+    }
+
+    // 探索用に盤面を複製する（ログや画面更新はしない）
+    cloneForSearch() {
+        const sim = Object.create(CardGame.prototype);
+        sim.isSimulation = true;
+        sim.gameState = { ...this.gameState };
+        sim.players = {};
+        for (const p of [1, 2]) {
+            const data = this.players[p];
+            sim.players[p] = {
+                ...data,
+                hand: data.hand.map(card => ({ ...card })),
+                deck: [],
+                battlefield: data.battlefield.map(monster => monster && { ...monster }),
+                swappedColumns: new Set(data.swappedColumns)
+            };
+        }
+        sim.computerPlayers = this.computerPlayers;
+        sim.computerTurnTimeout = null;
+        sim.autoEndTurnTimeout = null;
+        sim.log = () => {};
+        return sim;
+    }
+
+    canSwap(player, position) {
+        const data = this.players[player];
+        return !this.gameState.gameOver && player === this.gameState.currentPlayer && (position === 2 || position === 3) &&
+            data.energy >= 1 && !!data.battlefield[position] && !data.swappedColumns.has(position % 2);
+    }
+
+    listTacticalActions(player) {
+        const actions = [];
+        for (const position of [0, 1]) if (this.canMonsterAttack(player, position)) actions.push({ type: 'attack', position });
+        for (const position of [2, 3]) if (this.canSwap(player, position)) actions.push({ type: 'swap', position });
+        for (const position of [0, 1, 2, 3]) if (this.canMoveSideways(player, position)) actions.push({ type: 'move', position });
+        return actions;
+    }
+
+    applyTacticalAction(player, action) {
+        if (action.type === 'attack') return this.attackFrontMonster(player, action.position);
+        if (action.type === 'swap') return this.swapBackToFront(player, action.position);
+        if (action.type === 'move') return this.moveSideways(player, action.position);
+        return false;
+    }
+
+    // 同一手番内の致死手順を深さ優先で探す。見つからなければnull。
+    findLethalPlan(player, nodeLimit = 5000) {
+        const opponent = player === 1 ? 2 : 1;
+        if (!this.players[player].canAttackThisTurn) return null;
+        let nodes = 0;
+        const search = state => {
+            if (state.gameState.gameOver) return state.gameState.winner === player ? [] : null;
+            if (++nodes > nodeLimit) return null;
+            // 直接攻撃できる可能性があるモンスターの攻撃力合計が足りなければ打ち切る
+            const potential = state.players[player].battlefield
+                .filter(monster => monster && !monster.hasAttacked && monster.summonedTurn !== state.gameState.turnNumber)
+                .reduce((sum, monster) => sum + monster.attack, 0);
+            if (potential < state.players[opponent].life) return null;
+            for (const action of state.listTacticalActions(player)) {
+                const next = state.cloneForSearch();
+                if (!next.applyTacticalAction(player, action)) continue;
+                const rest = search(next);
+                if (rest) return [action, ...rest];
+            }
+            return null;
+        };
+        return search(this.cloneForSearch());
+    }
+
     computerSummon(player) {
         const playerData = this.players[player];
 
-        if (playerData.actionPoints < 1) return false;
+        if (playerData.energy < 1) return false;
 
         const openPositions = [];
         playerData.battlefield.forEach((monster, index) => {
@@ -763,7 +956,7 @@ class CardGame {
 
         const selectableCards = playerData.hand
             .map((card, index) => ({ card, index }))
-            .filter(item => item.card.cost <= playerData.gems);
+            .filter(item => item.card.cost <= playerData.energy);
 
         if (selectableCards.length === 0) return false;
 
@@ -777,7 +970,12 @@ class CardGame {
         });
 
         const targetCard = selectableCards[0];
-        const position = openPositions[Math.floor(Math.random() * openPositions.length)];
+        const opponent = player === 1 ? 2 : 1;
+        openPositions.sort((a, b) => {
+            const score = pos => pos < 2 ? (this.players[opponent].battlefield[pos] ? 2 : 1) : 0;
+            return score(b) - score(a);
+        });
+        const position = openPositions[0];
 
         const success = this.summonMonster(player, targetCard.index, position);
         if (success) {
@@ -786,82 +984,35 @@ class CardGame {
         return success;
     }
 
-    computerAttack(player, opponent, prioritizeLethal = false) {
-        const playerData = this.players[player];
-
-        if (!playerData.canAttackThisTurn) return false;
-
-        if (playerData.actionPoints < 1) return false;
-
-        const attackers = playerData.battlefield
-            .map((monster, index) => ({ monster, index }))
-            .filter(item => {
-                if (!item.monster) return false;
-                // Only front row monsters can attack
-                const actualRow = this.getActualRow(item.index, player);
-                return actualRow === ROW.FRONT;
-            });
-
-        if (attackers.length === 0) return false;
-
+    // 攻撃候補。反撃で倒れる攻撃も含める（その敵は次の手番にこちらを倒せるため、先に削る方が得）
+    computerAttackChoices(player) {
+        const opponent = player === 1 ? 2 : 1;
         const opponentData = this.players[opponent];
-        const opponentMonsters = opponentData.battlefield
-            .map((monster, index) => ({ monster, index }))
-            .filter(item => item.monster !== null);
-
         const choices = [];
-
-        attackers.forEach(attacker => {
-            // Check for valid monster targets in the same column (front-facing)
-            const attackerColumn = attacker.index % 2;
-            const validTargets = opponentMonsters.filter(target =>
-                this.isValidAttackTarget(attacker.index, target.index, player, opponent)
-            );
-
-            // Add monster attack choices
-            validTargets.forEach(target => {
-                const damage = attacker.monster.attack;
-                choices.push({
-                    attackerIndex: attacker.index,
-                    attackerAttack: attacker.monster.attack,
-                    targetPosition: target.index,
-                    damage: damage,
-                    lethal: false,
-                    willKill: damage >= target.monster.hp,
-                    targetHp: target.monster.hp,
-                    targetAttack: target.monster.attack
-                });
-            });
-
-            // Add direct player attack choice if no valid monster targets in front
-            if (validTargets.length === 0) {
-                const damage = attacker.monster.attack;
-                choices.push({
-                    attackerIndex: attacker.index,
-                    attackerAttack: attacker.monster.attack,
-                    targetPosition: null,
-                    damage,
-                    lethal: damage >= opponentData.life,
-                    willKill: false,
-                    targetHp: opponentData.life,
-                    targetAttack: 0
-                });
+        for (const position of [0, 1]) {
+            if (!this.canMonsterAttack(player, position)) continue;
+            const attacker = this.players[player].battlefield[position];
+            const target = opponentData.battlefield[position];
+            if (target) {
+                const damage = this.damageTo(attacker, target);
+                if (damage === 0) continue; // 守りで無効になる攻撃は反撃を受けるだけ
+                const willKill = damage >= target.hp;
+                choices.push({ attackerIndex: position, targetPosition: position, willKill, damage,
+                    targetHp: target.hp, targetAttack: target.attack, attackerAttack: attacker.attack });
+            } else {
+                choices.push({ attackerIndex: position, targetPosition: null, willKill: false, damage: attacker.attack,
+                    targetHp: opponentData.life, targetAttack: 0, attackerAttack: attacker.attack });
             }
-        });
+        }
+        return choices;
+    }
 
+    computerAttack(player, opponent, lethalOnly = false) {
+        let choices = this.computerAttackChoices(player);
+        if (lethalOnly) choices = choices.filter(choice => choice.targetPosition === null && choice.damage >= this.players[opponent].life);
         if (choices.length === 0) return false;
 
-        let candidateChoices = choices;
-        if (prioritizeLethal) {
-            const lethalChoices = choices.filter(choice => choice.lethal);
-            if (lethalChoices.length === 0) {
-                return false;
-            }
-            candidateChoices = lethalChoices;
-        }
-
-        candidateChoices.sort((a, b) => {
-            if (a.lethal !== b.lethal) return b.lethal - a.lethal;
+        choices.sort((a, b) => {
             if (a.willKill !== b.willKill) return b.willKill - a.willKill;
             if (a.targetAttack !== b.targetAttack) return b.targetAttack - a.targetAttack;
             if (a.damage !== b.damage) return b.damage - a.damage;
@@ -869,7 +1020,7 @@ class CardGame {
             return b.attackerAttack - a.attackerAttack;
         });
 
-        const choice = candidateChoices[0];
+        const choice = choices[0];
         const success = this.attackWithMonster(player, choice.attackerIndex, opponent, choice.targetPosition);
         if (success) {
             this.updateUI();
@@ -886,8 +1037,31 @@ class CardGame {
     }
 
     setupEventListeners() {
+        // 対戦途中の誤クリックで対戦が消えないよう、2回押しで新しい対戦を始める
+        const restartBtn = document.getElementById('restart-btn');
+        let restartTimer = null;
+        restartBtn.addEventListener('click', () => {
+            const inProgress = !this.gameState.gameOver && this.gameState.turnNumber > 2;
+            if (!inProgress || restartTimer) {
+                window.location.reload();
+                return;
+            }
+            restartBtn.textContent = 'もう一度押すと新しい対戦';
+            restartBtn.classList.add('confirming');
+            restartTimer = setTimeout(() => {
+                restartTimer = null;
+                restartBtn.textContent = '新しい対戦';
+                restartBtn.classList.remove('confirming');
+            }, 3000);
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && this.selectedCard !== null) {
+                this.selectedCard = null;
+                this.updateUI();
+            }
+        });
         document.getElementById('end-turn-btn').addEventListener('click', () => {
-            if (this.isComputerTurn()) return;
+            if (this.gameState.gameOver || this.isComputerTurn()) return;
             this.endTurn();
         });
     }
@@ -904,26 +1078,25 @@ class CardGame {
         logContent.scrollTop = 0;
     }
 
+    // 交代は、交代したモンスターがこの手番に攻撃できる場合だけ行う
     computerSwap(player) {
         const playerData = this.players[player];
+        if (playerData.energy < 1 || !playerData.canAttackThisTurn) return false;
+        const opponent = player === 1 ? 2 : 1;
+        const usefulFront = new Set(this.computerAttackChoices(player).map(choice => choice.attackerIndex));
+        // 後列は攻撃されないので、反撃で倒れるだけの交代はしない
 
-        // Find back row monsters that could benefit from moving to front
-        const backRowPositions = [POSITION.BACK_LEFT, POSITION.BACK_RIGHT];
-
-        for (let backPos of backRowPositions) {
+        for (const backPos of [POSITION.BACK_LEFT, POSITION.BACK_RIGHT]) {
+            if (!this.canSwap(player, backPos)) continue;
             const backMonster = playerData.battlefield[backPos];
-            if (!backMonster) continue;
-
-            const frontPos = backPos - 2; // Convert back position to front position
-            const frontMonster = playerData.battlefield[frontPos];
-
-            // Only swap if front position is empty or front monster is weaker
-            if (!frontMonster || frontMonster.attack < backMonster.attack) {
-                this.swapBackToFront(player, backPos);
-                return true;
-            }
+            if (backMonster.hasAttacked) continue;
+            const frontPos = backPos - 2;
+            if (usefulFront.has(frontPos)) continue; // 前列が先に攻撃できるなら交代しない
+            const enemy = this.players[opponent].battlefield[frontPos];
+            if (!enemy && backMonster.summonedTurn === this.gameState.turnNumber) continue;
+            if (enemy && backMonster.attack < enemy.hp && enemy.attack >= backMonster.hp) continue;
+            return this.swapBackToFront(player, backPos);
         }
-
         return false;
     }
 
