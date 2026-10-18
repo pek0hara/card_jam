@@ -6,6 +6,9 @@ const POSITION = {
     BACK_RIGHT: 3
 };
 
+// 召喚されたモンスターは、直後の相手手番の間だけ受けるダメージをこの値だけ減らす（0で無効）
+const RULES = { summonGuard: 1 };
+
 const ROW = {
     FRONT: 0,
     BACK: 1
@@ -79,7 +82,7 @@ class CardGame {
     initializeGame() {
         this.createDecks();
         this.drawInitialHands();
-        this.log("カードジャム v1.6 - ゲーム開始！");
+        this.log("カードジャム v1.7 - ゲーム開始！");
         // 先攻も最初の手番にドローする（後攻は最初の手番のコストが3）
         this.startTurn(this.gameState.currentPlayer);
 
@@ -222,7 +225,8 @@ class CardGame {
         attacker.hasAttacked = true;
 
         // Calculate damage (no position modifiers)
-        let damage = attacker.attack;
+        const guardTarget = targetPosition === null ? null : this.players[targetPlayer].battlefield[targetPosition];
+        let damage = guardTarget ? this.damageTo(attacker, guardTarget) : attacker.attack;
 
         if (targetPosition !== null) {
             const target = this.players[targetPlayer].battlefield[targetPosition];
@@ -232,7 +236,7 @@ class CardGame {
             }
 
             target.hp -= damage;
-            this.log(`${attacker.name}が${target.name}に${damage}ダメージ！`);
+            this.log(`${attacker.name}が${target.name}に${damage}ダメージ！${this.isGuarded(target) ? `（召喚直後の守りで-${Math.min(RULES.summonGuard, attacker.attack)}）` : ''}`);
 
             // Check for counter-attack: front row attacking front row
             const attackerRow = this.getActualRow(attackerPosition, attackerPlayer);
@@ -269,6 +273,15 @@ class CardGame {
 
         this.checkWinCondition();
         return true;
+    }
+
+    // 直前の相手手番に召喚されたモンスターは守られている
+    isGuarded(monster) {
+        return RULES.summonGuard > 0 && !!monster && monster.summonedTurn === this.gameState.turnNumber - 1;
+    }
+
+    damageTo(attacker, target) {
+        return Math.max(0, attacker.attack - (this.isGuarded(target) ? RULES.summonGuard : 0));
     }
 
     // Get actual row for position considering player 2's visual layout
@@ -345,10 +358,9 @@ class CardGame {
         }
 
         playerData.turnsTaken += 1;
-        playerData.maxEnergy = Math.min(4, playerData.turnsTaken + 1);
-        // 先攻・後攻の差を縮めるため、後攻の最初の手番だけコスト3
+        // 先攻・後攻の差を縮めるため、後攻はコストが1手番早く伸びる（先攻2→3→4、後攻3→4）
         const isSecondPlayer = this.gameState.firstPlayer !== undefined && player !== this.gameState.firstPlayer;
-        if (isSecondPlayer && playerData.turnsTaken === 1) playerData.maxEnergy = 3;
+        playerData.maxEnergy = Math.min(4, playerData.turnsTaken + (isSecondPlayer ? 2 : 1));
         playerData.energy = playerData.maxEnergy;
         playerData.battlefield.forEach(monster => { if (monster) monster.hasAttacked = false; });
         playerData.swappedColumns.clear();
@@ -562,13 +574,15 @@ class CardGame {
         if (!target) {
             return { short: `本体に${monster.attack}`, detail: `${this.playerName(opponent)}に${monster.attack}ダメージ` };
         }
-        const kills = monster.attack >= target.hp;
+        const damage = this.damageTo(monster, target);
+        const kills = damage >= target.hp;
         const counter = kills ? 0 : target.attack;
         const dies = !kills && counter >= monster.hp;
-        const short = kills ? `${target.name}撃破` : dies ? `${monster.attack}・反撃で倒れる` : `${monster.attack}・反撃${counter}`;
-        const detail = kills
-            ? `${target.name}に${monster.attack}ダメージで撃破（反撃なし）`
-            : `${target.name}に${monster.attack}ダメージ（残り体力${target.hp - monster.attack}）。反撃${counter}${dies ? 'で倒れます' : ''}`;
+        const short = kills ? `${target.name}撃破` : dies ? `${damage}・反撃で倒れる` : `${damage}・反撃${counter}`;
+        const guardNote = this.isGuarded(target) ? `召喚直後の守りで-${RULES.summonGuard}。` : '';
+        const detail = guardNote + (kills
+            ? `${target.name}に${damage}ダメージで撃破（反撃なし）`
+            : `${target.name}に${damage}ダメージ（残り体力${target.hp - damage}）。反撃${counter}${dies ? 'で倒れます' : ''}`);
         return { short, detail, dies };
     }
 
@@ -622,11 +636,13 @@ class CardGame {
                 monsterElement.className = 'monster';
                 const status = this.monsterStatus(player, position);
                 if (monster.hasAttacked) monsterElement.classList.add('exhausted');
+                const guarded = !this.gameState.gameOver && this.isGuarded(monster);
+                if (guarded) monsterElement.classList.add('guarded');
                 monsterElement.title = `${monster.name}（${slotName}）${status ? '：' + status : ''}`;
                 monsterElement.innerHTML = `
                     <img class="monster-image" src="${this.getCardImagePath(monster.name)}" alt="">
                     <div class="monster-info">
-                        <span class="monster-label">${monster.name}${status ? `<small> · ${status}</small>` : ''}</span>
+                        <span class="monster-label">${monster.name}${guarded ? `<span class="guard-badge" title="召喚直後：この手番の間、受けるダメージ-${RULES.summonGuard}">守り-${RULES.summonGuard}</span>` : ''}${status ? `<small> · ${status}</small>` : ''}</span>
                         <div class="monster-stats">
                             <span class="stat-pill hp-stat"><img class="stat-icon" src="img/heart.svg" alt="体力"><span>${monster.hp}/${monster.maxHp}</span></span>
                             <span class="stat-pill attack-stat"><img class="stat-icon" src="img/sword.svg" alt="攻撃"><span>${monster.attack}</span></span>
@@ -978,8 +994,10 @@ class CardGame {
             const attacker = this.players[player].battlefield[position];
             const target = opponentData.battlefield[position];
             if (target) {
-                const willKill = attacker.attack >= target.hp;
-                choices.push({ attackerIndex: position, targetPosition: position, willKill, damage: attacker.attack,
+                const damage = this.damageTo(attacker, target);
+                if (damage === 0) continue; // 守りで無効になる攻撃は反撃を受けるだけ
+                const willKill = damage >= target.hp;
+                choices.push({ attackerIndex: position, targetPosition: position, willKill, damage,
                     targetHp: target.hp, targetAttack: target.attack, attackerAttack: attacker.attack });
             } else {
                 choices.push({ attackerIndex: position, targetPosition: null, willKill: false, damage: attacker.attack,

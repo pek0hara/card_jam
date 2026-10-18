@@ -194,14 +194,14 @@ test('AIは交代しても攻撃できない後列モンスターを交代しな
     assert.equal(g.computerSwap(2),false); assert.equal(g.players[2].energy,4);
     fresh.summonedTurn=1; assert.equal(g.computerSwap(2),true);
 });
-test('先攻も最初の手番にドローし、後攻の最初の手番はコスト3', () => {
+test('先攻も最初の手番にドローし、コストは先攻2→3→4、後攻3→4', () => {
     const g=game(); g.gameState.firstPlayer=1; g.gameState.currentPlayer=1;
     for (const p of [1,2]) Object.assign(g.players[p],{turnsTaken:0,firstTurnCompleted:false,hand:[monster('h')],deck:[monster('d1'),monster('d2')]});
     g.startTurn(1); assert.equal(g.players[1].hand.length,2); assert.equal(g.players[1].maxEnergy,2);
     g.endTurn(); assert.equal(g.players[2].hand.length,2); assert.equal(g.players[2].maxEnergy,3);
     g.endTurn(); assert.equal(g.players[1].maxEnergy,3);
-    g.endTurn(); assert.equal(g.players[2].maxEnergy,3);
-    g.endTurn(); g.endTurn(); assert.equal(g.players[2].maxEnergy,4);
+    g.endTurn(); assert.equal(g.players[2].maxEnergy,4);
+    g.endTurn(); assert.equal(g.players[1].maxEnergy,4);
 });
 test('攻撃予告は撃破・反撃・直接攻撃を区別する', () => {
     const g=game(); const a={...monster('a'),attack:3,hp:2};
@@ -218,3 +218,24 @@ test('ログの主語はあなた/AIで表示する', () => {
     assert.ok(logs.some(m=>m.includes('AIに2ダメージ'))); assert.ok(!logs.some(m=>m.includes('プレイヤー')));
 });
 
+// v1.7
+test('召喚直後のモンスターは、直後の相手手番だけ受けるダメージ-1', () => {
+    const g=game(); g.gameState.currentPlayer=2; g.players[2].hand=[{...monster('new'),hp:3}];
+    g.summonMonster(2,0,0); const fresh=g.players[2].battlefield[0];
+    g.gameState.turnNumber++; g.gameState.currentPlayer=1;
+    const a={...monster('a'),attack:3,hp:9}; g.players[1].battlefield[0]=a;
+    assert.equal(g.isGuarded(fresh),true); assert.equal(g.damageTo(a,fresh),2);
+    assert.match(g.previewAttack(1,0).detail,/守りで-1/);
+    g.attackWithMonster(1,0,2,0); assert.equal(fresh.hp,1);
+    g.gameState.turnNumber+=2; assert.equal(g.isGuarded(fresh),false); assert.equal(g.damageTo(a,fresh),3);
+});
+test('守りは本体への直接攻撃に影響しない', () => {
+    const g=game(); const a={...monster('a'),attack:3}; g.players[1].battlefield[0]=a;
+    g.attackWithMonster(1,0,2); assert.equal(g.players[2].life,17);
+});
+test('AIは守りでダメージ0になる攻撃をしない', () => {
+    const g=game(); g.gameState.currentPlayer=2;
+    g.players[2].battlefield[0]={...monster('weak'),attack:1,summonedTurn:1};
+    g.players[1].battlefield[0]={...monster('fresh'),summonedTurn:g.gameState.turnNumber-1};
+    assert.equal(g.computerAttackChoices(2).length,0);
+});
