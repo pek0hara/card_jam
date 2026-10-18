@@ -12,10 +12,13 @@ function loadGame(variant) {
     // guardN：game.jsの召喚直後の守りをNに設定（AIと攻撃予告も同じ値を使う）
     const guard = variant.find(v => /^guard\d$/.test(v));
     let src = fs.readFileSync('game.js', 'utf8');
-    if (guard) src = src.replace(/const RULES = \{ summonGuard: \d+ \};/, `const RULES = { summonGuard: ${guard.slice(5)} };`);
+    if (guard) src = src.replace(/summonGuard: \d+/, `summonGuard: ${guard.slice(5)}`);
+    // 貫通先：tramplePlayer／trampleBack／trampleOff
+    const t = variant.find(v => /^trample(Player|Back|Off)$/.test(v));
+    if (t) src = src.replace(/trample: (?:'player'|'back'|false)/, `trample: ${{ tramplePlayer: "'player'", trampleBack: "'back'", trampleOff: 'false' }[t]}`);
     vm.runInContext(src + '\nthis.Game=CardGame;', c);
     const P = c.Game.prototype;
-    for (const name of variant) if (!/^guard\d$/.test(name)) PATCHES[name](P);
+    for (const name of variant) if (!/^guard\d$|^trample(Player|Back|Off)$/.test(name)) PATCHES[name](P);
     return c.Game;
 }
 
@@ -191,6 +194,33 @@ const PATCHES = {
         const create = P.createDecks;
         P.createDecks = function () { create.call(this); this.players[other(this.gameState.firstPlayer)].life = 22; };
     },
+    // v1.7用の貫通パッチ（v1.8以降はgame.jsのRULES.trampleを tramplePlayer などで切り替える）
+    trample(P) {
+        const attack = P.attackWithMonster;
+        P.attackWithMonster = function (ap, apos, tp, tpos = null) {
+            const t = tpos === null ? null : this.players[tp]?.battlefield[tpos];
+            const ok = attack.call(this, ap, apos, tp, tpos);
+            if (ok && t && t.hp < 0 && !this.gameState.gameOver) {
+                this.players[tp].life = Math.max(0, this.players[tp].life + t.hp);
+                this.checkWinCondition();
+            }
+            return ok;
+        };
+    },
+    // 勝敗の仕様：自分のモンスターが破壊されるとライフ-1
+    deathPenalty(P) {
+        const attack = P.attackWithMonster;
+        P.attackWithMonster = function (ap, apos, tp, tpos = null) {
+            const count = p => this.players[p].battlefield.filter(Boolean).length;
+            const before = { 1: count(1), 2: count(2) };
+            const ok = attack.call(this, ap, apos, tp, tpos);
+            if (ok && !this.gameState.gameOver) {
+                for (const p of [1, 2]) this.players[p].life = Math.max(0, this.players[p].life - (before[p] - count(p)));
+                this.checkWinCondition();
+            }
+            return ok;
+        };
+    },
     // 先攻・後攻の補正の組み替え：先攻の初回ドローなし
     firstNoDraw(P) {
         const start = P.startTurn;
@@ -241,7 +271,7 @@ function randomPolicy(g, p) {
 }
 const aiPolicy = (g, p) => g.performComputerAction(p);
 
-function play(Game, n, policies, metrics) {
+function play(Game, n, policies, metrics, startLife = 20) {
     seed = Number(process.env.SEED || 52000) + Math.floor(n / 2);
     const g = Object.create(Game.prototype);
     const first = n % 2 + 1;
@@ -253,6 +283,7 @@ function play(Game, n, policies, metrics) {
     let fatigue = false;
     const draw = g.drawCard;
     g.drawCard = function (p) { draw.call(this, p); if (this.gameState.gameOver) fatigue = true; };
+    g.players[1].life = g.players[2].life = startLife;
     g.createDecks(); g.drawInitialHands(); g.startTurn(first);
     const diffs = [];
     while (!g.gameState.gameOver && g.gameState.turnNumber < 300) {
@@ -265,39 +296,43 @@ function play(Game, n, policies, metrics) {
     const winnerLife = g.players[w].life;
     // 勝者が途中でライフ5以上負けていたか
     const sign = w === 1 ? 1 : -1;
-    const comeback = diffs.some(d => d * sign <= -5);
+    const comeback = diffs.some(d => d * sign <= -startLife / 4);
     let changes = 0, last = 0;
     for (const d of diffs) { const s = Math.sign(d); if (s && last && s !== last) changes++; if (s) last = s; }
     if (metrics) {
         metrics.n++; metrics.turns += g.gameState.turnNumber; metrics.firstWins += w === first; metrics.fatigue += fatigue;
-        metrics.close += winnerLife <= 5; metrics.blowout += winnerLife >= 15; metrics.comeback += comeback; metrics.changes += changes;
-        metrics.winnerLife += winnerLife;
+        metrics.close += winnerLife <= startLife / 4; metrics.blowout += winnerLife >= startLife * 3 / 4; metrics.comeback += comeback; metrics.changes += changes;
+        metrics.winnerLife += winnerLife / startLife;
     }
     return w;
 }
 
 function evaluate(name, variant, N) {
-    const Game = loadGame(variant);
+    const lifeTag = variant.find(v => /^life\d+$/.test(v));
+    const defaultLife = Number(/startingLife: (\d+)/.exec(fs.readFileSync('game.js', 'utf8'))?.[1] || 20);
+    const startLife = lifeTag ? Number(lifeTag.slice(4)) : defaultLife;
+    const Game = loadGame(variant.filter(v => v !== lifeTag));
     const m = { n: 0, turns: 0, firstWins: 0, fatigue: 0, close: 0, blowout: 0, comeback: 0, changes: 0, winnerLife: 0 };
-    for (let n = 0; n < N; n++) play(Game, n, { 1: aiPolicy, 2: aiPolicy }, m);
+    for (let n = 0; n < N; n++) play(Game, n, { 1: aiPolicy, 2: aiPolicy }, m, startLife);
     // 実力差：AIがランダム操作にどれだけ勝つか（席を交代）
     const S = Math.min(N, 1000);
     let skill = 0;
     for (let n = 0; n < S; n++) {
         const seat = Math.floor(n / 2) % 2 === 0 ? 1 : 2;
         const pol = seat === 1 ? { 1: aiPolicy, 2: weakPolicy } : { 1: weakPolicy, 2: aiPolicy };
-        if (play(Game, n, pol) === seat) skill++;
+        if (play(Game, n, pol, null, startLife) === seat) skill++;
     }
     const pct = x => +(x / m.n * 100).toFixed(1);
     return {
         案: name, 接戦率: pct(m.close), 大差率: pct(m.blowout), 逆転率: pct(m.comeback),
-        リード交代: +(m.changes / m.n).toFixed(2), 勝者平均ライフ: +(m.winnerLife / m.n).toFixed(1),
+        リード交代: +(m.changes / m.n).toFixed(2), 勝者残りライフ率: Math.round(m.winnerLife / m.n * 100),
         平均手番: +(m.turns / m.n).toFixed(1), 疲労決着: pct(m.fatigue), 先攻勝率: pct(m.firstWins),
         対中級勝率: +(skill / S * 100).toFixed(1)
     };
 }
 
 const VARIANTS = {
+    'v1.8': [],
     守りなし: ['guard0'],
     撃破ドロー: ['deathDraw'],
     後列休息: ['backRest'],
