@@ -1,0 +1,47 @@
+[
+  {
+    "policy": "現行AI",
+    "matches": 200,
+    "wins": 91,
+    "firstWins": 153,
+    "turns": 7039,
+    "fatigueFinish": 146,
+    "directDamage": 2837,
+    "fatigueDamage": 4029,
+    "summons": 4974,
+    "attacks": 7127,
+    "swaps": 215,
+    "backSummons": 348,
+    "unusedAP": 1685
+  },
+  {
+    "policy": "空き列を攻める",
+    "matches": 200,
+    "wins": 85,
+    "firstWins": 139,
+    "turns": 6828,
+    "fatigueFinish": 143,
+    "directDamage": 3560,
+    "fatigueDamage": 3277,
+    "summons": 4975,
+    "attacks": 7010,
+    "swaps": 358,
+    "backSummons": 508,
+    "unusedAP": 1385
+  },
+  {
+    "policy": "展開を抑えて攻撃",
+    "matches": 200,
+    "wins": 63,
+    "firstWins": 131,
+    "turns": 6840,
+    "fatigueFinish": 131,
+    "directDamage": 3539,
+    "fatigueDamage": 3287,
+    "summons": 4496,
+    "attacks": 6767,
+    "swaps": 149,
+    "backSummons": 278,
+    "unusedAP": 2155
+  }
+]

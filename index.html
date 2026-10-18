@@ -4,19 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>カードゲーム</title>
-    <link rel="stylesheet" href="style.css?v=23">
+    <link rel="stylesheet" href="style.css?v=25">
 </head>
 <body>
     <div id="game-container">
+        <header class="game-header"><strong>カードジャム</strong><span id="turn-status" aria-live="polite"></span><button id="restart-btn">新しい対戦</button></header>
+        <details class="rules"><summary>遊び方・共通コスト</summary><p>ライフ20を削り切れば勝利。共通コストは自分の初回2、次回3、以降4に毎ターン全回復。持ち越しや被ダメージによる獲得はありません。</p><p>手札→空きマスで召喚：カード右上のコストを消費。移動ボタンで同じ段の左右の空きマスへ移動：コスト1、1体につき毎ターン1回。後列のモンスター本体をクリックして前後交代：コスト1、列ごとに毎ターン1回。</p><p>前列のモンスター本体をクリックして正面へ攻撃：無料、1体につき毎ターン1回。敵がいなければ直接攻撃。双方の初回ターンは攻撃不可。召喚ターンは敵モンスターにのみ攻撃可。移動・交代しても攻撃済みと召喚直後の制限は維持。</p><p>敵が生き残ると反撃。前列が空くと後列が自動前進。コスト0でも攻撃可能。コスト0かつ攻撃が残っていなければ自動終了。</p><p>初手3枚にコスト2以下を1枚保証。手札は4枚まで。満杯ならドロー見送り。山札切れはドローのたびに疲労1、2、3…ダメージ。</p></details>
+        <p class="combat-guide">コストは毎ターン2→3→4に全回復。召喚はカードの数値、移動・交代は1。攻撃は無料。</p>
         <div id="game-board">
             <!-- プレイヤー2エリア（上側） -->
             <div class="player-area" id="player2-area">
                 <div class="player-info">
-                    <span class="player-name">プレイヤー2</span>
+                    <span class="player-name">AI</span>
                     <div class="player-stats">
                         <span class="life">ライフ: <span id="player2-life">20</span></span>
-                        <span class="gems">ジェム: <span id="player2-gems">0</span></span>
-                        <span class="action">行動力: <span id="player2-action">0</span></span>
+                        <span class="energy">コスト: <span id="player2-energy">0/0</span></span>
                     </div>
                 </div>
                 <div class="hand" id="player2-hand">
@@ -47,11 +49,10 @@
                     <!-- プレイヤー1の手札 -->
                 </div>
                 <div class="player-info">
-                    <span class="player-name">プレイヤー1</span>
+                    <span class="player-name">あなた</span>
                     <div class="player-stats">
                         <span class="life">ライフ: <span id="player1-life">20</span></span>
-                        <span class="gems">ジェム: <span id="player1-gems">0</span></span>
-                        <span class="action">行動力: <span id="player1-action">1</span></span>
+                        <span class="energy">コスト: <span id="player1-energy">0/0</span></span>
                     </div>
                 </div>
             </div>
@@ -62,6 +63,6 @@
         </div>
     </div>
 
-    <script src="game.js?v=11"></script>
+    <script src="game.js?v=14"></script>
 </body>
 </html>

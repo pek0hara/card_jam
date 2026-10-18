@@ -281,7 +281,7 @@ body {
 .field-slot {
     width: 100%;
     min-height: 72px;
-    aspect-ratio: 3 / 2;
+    height: 82px;
     border: 2px dashed #cbd5e0;
     border-radius: 8px;
     display: flex;
@@ -453,7 +453,7 @@ body {
 
     .field-slot {
         min-height: 76px;
-        aspect-ratio: 3 / 2;
+        height: 82px;
     }
 
     .monster {
@@ -472,3 +472,28 @@ body {
         line-height: 1;
     }
 }
+
+.game-header { display:flex; align-items:center; gap:12px; padding:8px; flex-wrap:wrap; }
+#turn-status { flex:1; font-size:13px; }
+#restart-btn { padding:7px 12px; border:1px solid #cbd5e0; border-radius:6px; background:white; cursor:pointer; }
+.rules { padding:8px 12px; background:white; border-radius:8px; font-size:12px; line-height:1.6; }
+.rules summary { cursor:pointer; font-weight:bold; }
+.rules p { margin-top:6px; }
+.combat-guide { padding:6px 10px; font-size:12px; line-height:1.5; color:#2b6cb0; background:#ebf8ff; border-radius:6px; }
+.field-slot { position:relative; }
+.field-slot:empty::after { content:attr(data-label); color:#718096; font-size:12px; }
+.monster-label { font-size:11px; line-height:16px; }
+.monster.exhausted { background:#64748b; }
+.card.unaffordable { opacity:0.55; }
+.card-stats { flex-wrap:nowrap; gap:2px; font-size:11px; }
+.card-stats .stat-pill { padding:1px 2px; }
+#end-turn-btn:disabled { background:#718096; cursor:default; transform:none; }
+#game-log { flex-basis:120px; height:120px; }
+
+.energy { background: #bee3f8 !important; color: #2b6cb0 !important; }
+.field-slot { height: 108px; }
+.monster { padding: 5px; gap: 1px; }
+.monster-actions { display:flex; justify-content:center; margin-top:auto; }
+.monster-actions button { background:#edf2f7; color:#2d3748; border:0; border-radius:4px; padding:4px 10px; font-size:12px; cursor:pointer; }
+.monster-actions button:disabled { opacity:.45; cursor:default; }
+.monster-image { height:26px; }
